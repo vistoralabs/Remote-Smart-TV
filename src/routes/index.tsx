@@ -4,7 +4,7 @@ import { RemoteApp } from "@/components/remote/RemoteApp";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Smart TV Remote \u2014 Wi-Fi TV Control" },
+      { title: "Smart TV Remote Test \u2014 Wi-Fi TV Control" },
       {
         name: "description",
         content:
