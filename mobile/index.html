@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0f1115" />
+    <title>Smart TV Remote</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=DM+Sans:wght@400;500;600&display=swap"
+    />
+    <script>
+      /* Paint the saved theme before the first frame so there is no flash. */
+      (function () {
+        var backgrounds = {
+          graphite: ["#0f1115", "#f6f7f9"],
+          midnight: ["#0c0f22", "#f4f5fd"],
+          mint: ["#08140f", "#f2faf6"],
+          noir: ["#0b0b0b", "#f7f6f3"],
+          ocean: ["#081520", "#f1f8fb"],
+        };
+        var texts = ["#f4f5f7", "#14171c"];
+        var skin = "graphite";
+        var appearance = "dark";
+        try {
+          var raw = window.localStorage.getItem("smarttv.settings.v1");
+          if (raw) {
+            var saved = JSON.parse(raw);
+            if (backgrounds[saved.skin]) skin = saved.skin;
+            if (saved.appearance === "light") appearance = "light";
+          }
+        } catch (error) {
+          /* storage unavailable */
+        }
+        var light = appearance === "light";
+        var background = backgrounds[skin][light ? 1 : 0];
+        var foreground = texts[light ? 1 : 0];
+        var root = document.documentElement;
+        root.classList.toggle("dark", !light);
+        root.classList.toggle("light", light);
+        root.style.colorScheme = appearance;
+        root.style.setProperty("--background", background);
+        root.style.setProperty("--foreground", foreground);
+        root.style.backgroundColor = background;
+        root.style.color = foreground;
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute("content", background);
+        window.__bootTheme = { background: background, foreground: foreground };
+      })();
+    </script>
+  </head>
+  <body style="margin: 0; font-family: system-ui, sans-serif">
+    <div id="root"></div>
+    <div
+      id="startup-fallback"
+      style="
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        text-align: center;
+      "
+    >
+      <div>
+        <strong style="display: block; font-size: 20px">Smart TV Remote</strong>
+        <span style="display: block; margin-top: 8px; font-size: 14px; opacity: 0.65"
+          >Starting remote…</span
+        >
+      </div>
+    </div>
+    <script>
+      (function () {
+        var boot = window.__bootTheme;
+        if (boot) {
+          document.body.style.backgroundColor = boot.background;
+          document.body.style.color = boot.foreground;
+        }
+        window.setTimeout(function () {
+          if (document.documentElement.dataset.appMounted !== "true") {
+            var message = document.querySelector("#startup-fallback span");
+            if (message)
+              message.textContent = "App files could not load. Please reinstall the latest APK.";
+          }
+        }, 5000);
+      })();
+    </script>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>

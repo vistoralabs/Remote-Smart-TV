@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Smart TV Remote</string>
+    <string name="title_activity_main">Smart TV Remote</string>
+    <string name="package_name">app.remote.universal</string>
+    <string name="custom_url_scheme">app.remote.universal</string>
+</resources>

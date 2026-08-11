@@ -1,0 +1,254 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Design system — "Graphite Remote".
+ * Dark hardware-inspired surface, warm amber signal accent, teal live state.
+ * All colors are oklch semantic tokens. Never hardcode colors in components.
+ */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+
+  /* hardware surface tokens */
+  --color-shell: var(--shell);
+  --color-key: var(--key);
+  --color-key-pressed: var(--key-pressed);
+  --color-key-foreground: var(--key-foreground);
+  --color-key-edge: var(--key-edge);
+  --color-icon: var(--icon);
+  --color-live: var(--live);
+  --color-live-foreground: var(--live-foreground);
+  --color-signal: var(--signal);
+  --color-signal-foreground: var(--signal-foreground);
+
+  --shadow-key: 0 1px 0 0 var(--key-edge) inset, 0 6px 14px -6px var(--shadow-color);
+  --shadow-shell: 0 24px 60px -30px var(--shadow-color);
+  --shadow-glow: 0 0 0 1px var(--signal), 0 0 26px -6px var(--signal);
+}
+
+
+/*
+ * Bootstrap palette only. At runtime ThemeManager (src/lib/theme.ts) sets every
+ * one of these variables on <html>, so themes/appearance apply app-wide at once.
+ */
+:root {
+  --radius: 1rem;
+  --shadow-color: rgba(0, 0, 0, 0.65);
+
+  --background: #0f1115;
+  --foreground: #f4f5f7;
+  --card: #1a1d23;
+  --card-foreground: #f4f5f7;
+  --popover: #16181d;
+  --popover-foreground: #f4f5f7;
+  --primary: #f0a93f;
+  --primary-foreground: #111111;
+  --secondary: #1e2128;
+  --secondary-foreground: #f4f5f7;
+  --muted: #1e2128;
+  --muted-foreground: #a7adb8;
+  --accent: #33373f;
+  --accent-foreground: #f4f5f7;
+  --destructive: #ff5567;
+  --destructive-foreground: #111111;
+  --border: #2c3038;
+  --input: #1e2128;
+  --ring: #f0a93f;
+
+  --shell: #16181d;
+  --key: #25282f;
+  --key-pressed: #33373f;
+  --key-foreground: #f4f5f7;
+  --key-edge: #3c414b;
+  --icon: #e7e9ee;
+  --live: #f0a93f;
+  --live-foreground: #111111;
+  --signal: #f0a93f;
+  --signal-foreground: #111111;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html,
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+  }
+
+  body {
+    font-family: var(--font-sans);
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: 0;
+  }
+}
+
+@utility shell-panel {
+  background-color: var(--color-shell);
+  background-image: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-shell) 92%, var(--color-foreground) 8%),
+    var(--color-shell)
+  );
+  box-shadow: var(--shadow-shell);
+}
+
+@utility glass-panel {
+  background-color: var(--color-card);
+  background-image: linear-gradient(
+    165deg,
+    color-mix(in srgb, var(--color-card) 94%, var(--color-foreground) 6%),
+    var(--color-card)
+  );
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-shell);
+}
+
+@utility key-face {
+  background-color: var(--color-key);
+  background-image: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-key) 92%, var(--color-foreground) 8%),
+    var(--color-key)
+  );
+  color: var(--color-key-foreground);
+  border-color: var(--color-key-edge);
+  box-shadow: var(--shadow-key);
+  transition:
+    transform 90ms ease,
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+@utility key-face-active {
+  background-color: var(--color-key-pressed);
+  background-image: none;
+  transform: translateY(1px) scale(0.97);
+}
+
+@utility signal-ring {
+  box-shadow: var(--shadow-glow);
+}
+
+@keyframes pulse-ring {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.9);
+  }
+  70% {
+    opacity: 0;
+    transform: scale(1.9);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.9);
+  }
+}
+
+@utility pulse-ring {
+  animation: pulse-ring 700ms ease-out;
+}
+
+/* ---------------------------------------------------------------
+ * Button styles — Soft raised (default), Glass, Flat, Neon glow.
+ * --------------------------------------------------------------- */
+[data-keystyle="glass"] .key-face {
+  background-color: color-mix(in srgb, var(--color-key) 55%, transparent);
+  background-image: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--color-foreground) 12%, transparent),
+    transparent
+  );
+  backdrop-filter: blur(14px);
+  border-color: color-mix(in srgb, var(--color-foreground) 26%, transparent);
+  box-shadow:
+    0 1px 0 0 color-mix(in srgb, var(--color-foreground) 18%, transparent) inset,
+    0 10px 24px -16px var(--shadow-color);
+}
+[data-keystyle="glass"] .key-face-active {
+  background-color: color-mix(in srgb, var(--color-key-pressed) 85%, transparent);
+}
+
+[data-keystyle="flat"] .key-face {
+  background-image: none;
+  background-color: var(--color-key);
+  box-shadow: none;
+  border-color: transparent;
+}
+[data-keystyle="flat"] .key-face-active {
+  background-color: var(--color-key-pressed);
+  transform: none;
+}
+
+[data-keystyle="neon"] .key-face {
+  background-image: none;
+  background-color: color-mix(in srgb, var(--color-key) 60%, var(--color-background));
+  border-color: color-mix(in srgb, var(--color-signal) 60%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-signal) 35%, transparent),
+    0 0 18px -8px var(--color-signal);
+}
+[data-keystyle="neon"] .key-face-active {
+  background-color: var(--color-key-pressed);
+  box-shadow:
+    0 0 0 1px var(--color-signal),
+    0 0 26px -4px var(--color-signal);
+}
+
+
+/* Accent (OK) key — must stay readable in every button style. */
+[data-keystyle] .key-primary,
+.key-primary {
+  background-color: var(--color-primary);
+  background-image: none;
+  color: var(--color-primary-foreground);
+  border-color: color-mix(in srgb, var(--color-primary) 70%, var(--color-foreground));
+  box-shadow: 0 6px 16px -10px var(--shadow-color);
+}
+[data-keystyle] .key-primary.key-face-active,
+.key-primary.key-face-active {
+  background-color: color-mix(in srgb, var(--color-primary) 82%, var(--color-foreground));
+  background-image: none;
+}

@@ -1,0 +1,134 @@
+apply plugin: 'com.android.application'
+
+// Release signing. Values come from android/keystore.properties, or from the
+// matching environment variables when building in CI.
+def keystorePropsFile = rootProject.file('keystore.properties')
+def keystoreProps = new Properties()
+if (keystorePropsFile.exists()) {
+    keystoreProps.load(new FileInputStream(keystorePropsFile))
+}
+def ksStorePath = keystoreProps['storeFile'] ?: System.getenv('ANDROID_KEYSTORE_FILE')
+def ksStorePass = keystoreProps['storePassword'] ?: System.getenv('ANDROID_KEYSTORE_PASSWORD')
+def ksKeyAlias = keystoreProps['keyAlias'] ?: System.getenv('ANDROID_KEY_ALIAS')
+def ksKeyPass = keystoreProps['keyPassword'] ?: System.getenv('ANDROID_KEY_PASSWORD')
+def hasReleaseSigning = ksStorePath != null && rootProject.file(ksStorePath).exists()
+
+android {
+    namespace = "app.remote.universal"
+    compileSdk = rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "app.remote.universal"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 48
+        versionName "4.1"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile rootProject.file(ksStorePath)
+                storePassword ksStorePass
+                keyAlias ksKeyAlias
+                keyPassword ksKeyPass
+            }
+        }
+    }
+    buildFeatures {
+        buildConfig true
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // Production AdMob units — the only ad ids compiled into a release build.
+            buildConfigField "String", "AD_BANNER", '"ca-app-pub-5732060577215447/6392367110"'
+            buildConfigField "String", "AD_INTERSTITIAL", '"ca-app-pub-5732060577215447/9070501342"'
+            buildConfigField "String", "AD_APP_OPEN", '"ca-app-pub-5732060577215447/9134080523"'
+            buildConfigField "boolean", "AD_TEST_UNITS", "false"
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
+        }
+        debug {
+            // Google's official test units — development never touches live ads.
+            buildConfigField "String", "AD_BANNER", '"ca-app-pub-3940256099942544/9214589741"'
+            buildConfigField "String", "AD_INTERSTITIAL", '"ca-app-pub-3940256099942544/1033173712"'
+            buildConfigField "String", "AD_APP_OPEN", '"ca-app-pub-3940256099942544/9257395921"'
+            buildConfigField "boolean", "AD_TEST_UNITS", "true"
+        }
+    }
+}
+
+// Never package a stale index.html without its hashed JS/CSS files. Building
+// Android now regenerates and verifies the complete WebView bundle first.
+def projectRoot = rootProject.projectDir.parentFile
+tasks.register('buildMobileWeb', Exec) {
+    workingDir projectRoot
+    commandLine 'node', 'scripts/build-mobile.mjs'
+    inputs.files(fileTree(new File(projectRoot, 'src')), fileTree(new File(projectRoot, 'mobile')))
+    inputs.files(new File(projectRoot, 'vite.mobile.config.ts'), new File(projectRoot, 'package.json'))
+    outputs.dir(new File(projectRoot, 'mobile-dist'))
+}
+
+tasks.register('syncMobileWeb', Copy) {
+    dependsOn 'buildMobileWeb'
+    from new File(projectRoot, 'mobile-dist')
+    into file('src/main/assets/public')
+    doFirst {
+        delete file('src/main/assets/public')
+    }
+    doLast {
+        def jsFiles = fileTree(file('src/main/assets/public/assets')).matching { include '*.js' }
+        def cssFiles = fileTree(file('src/main/assets/public/assets')).matching { include '*.css' }
+        if (jsFiles.isEmpty() || cssFiles.isEmpty()) {
+            throw new GradleException('WebView JavaScript/CSS bundle is missing; refusing to build a blank APK')
+        }
+    }
+}
+
+tasks.named('preBuild').configure {
+    dependsOn 'syncMobileWeb'
+}
+
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    implementation "org.bouncycastle:bcpkix-jdk18on:1.78.1"
+    // Google AdMob (banner + interstitial + app open) and the consent SDK.
+    implementation "com.google.android.gms:play-services-ads:24.2.0"
+    implementation "com.google.android.ump:user-messaging-platform:3.1.0"
+    // Official Google Play In-App Review API.
+    implementation "com.google.android.play:review:2.0.2"
+
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}
