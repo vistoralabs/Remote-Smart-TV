@@ -35,7 +35,7 @@ export function HelpSection({ t }: { t: Translate }) {
         ))}
       </Accordion>
       <a
-        href="mailto:support@smarttvremote.app?subject=Smart%20Android%20TV%20Remote%20support"
+        href="mailto:shivkr6083@gmail.com?subject=Smart%20Android%20TV%20Remote%20support"
         className="glass-panel mt-3 flex min-h-12 items-center gap-2 rounded-2xl border border-border/60 px-4 py-3 text-sm font-medium"
       >
         <LifeBuoy className="size-4 text-primary" />
