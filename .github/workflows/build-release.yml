@@ -1,0 +1,150 @@
+name: Build Android Release
+
+# Dedicated workflow to build the final signed Release APK and Release AAB.
+# Triggered manually from GitHub -> Actions -> Build Android Release -> Run workflow.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-release:
+    name: Build Signed Android Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build Web Bundle
+        run: npm run build
+
+      - name: Sync Capacitor Android Project
+        run: npx cap sync android
+
+      - name: Setup Java 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Configure Release Signing Credentials
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          echo "=== Checking Required GitHub Secrets ==="
+          MISSING=""
+          [ -z "$KEYSTORE_BASE64" ] && MISSING="$MISSING ANDROID_KEYSTORE_BASE64"
+          [ -z "$KEYSTORE_PASSWORD" ] && MISSING="$MISSING ANDROID_KEYSTORE_PASSWORD"
+          [ -z "$KEY_ALIAS" ] && MISSING="$MISSING ANDROID_KEY_ALIAS"
+          [ -z "$KEY_PASSWORD" ] && MISSING="$MISSING ANDROID_KEY_PASSWORD"
+
+          if [ -n "$MISSING" ]; then
+            echo "::error::Missing required GitHub Action Secrets:$MISSING"
+            echo "Please configure all 4 required secrets under Repository Settings -> Secrets and variables -> Actions:"
+            echo "  - ANDROID_KEYSTORE_BASE64"
+            echo "  - ANDROID_KEYSTORE_PASSWORD"
+            echo "  - ANDROID_KEY_ALIAS"
+            echo "  - ANDROID_KEY_PASSWORD"
+            exit 1
+          fi
+
+          mkdir -p android/keystore
+          echo "$KEYSTORE_BASE64" | base64 -d > android/keystore/release.jks
+          cat <<EOF > android/keystore.properties
+          storeFile=keystore/release.jks
+          storePassword=${KEYSTORE_PASSWORD}
+          keyAlias=${KEY_ALIAS}
+          keyPassword=${KEY_PASSWORD}
+          EOF
+          echo "Release keystore and properties successfully generated."
+
+      - name: Build Release APK and App Bundle (AAB)
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease bundleRelease --no-daemon
+
+      - name: Verify Release Artifacts Exist
+        run: |
+          echo "=== Verifying Artifact Existence ==="
+          APK="android/app/build/outputs/apk/release/app-release.apk"
+          AAB="android/app/build/outputs/bundle/release/app-release.aab"
+          if [ ! -f "$APK" ]; then
+            echo "::error::Release APK missing at $APK"
+            exit 1
+          fi
+          if [ ! -f "$AAB" ]; then
+            echo "::error::Release AAB missing at $AAB"
+            exit 1
+          fi
+          echo "Both app-release.apk and app-release.aab exist."
+
+      - name: Dynamic Signing Verification
+        run: |
+          APK="android/app/build/outputs/apk/release/app-release.apk"
+          
+          # Dynamically locate newest apksigner in ANDROID_HOME
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)
+          if [ -z "$APKSIGNER" ] || [ ! -x "$APKSIGNER" ]; then
+            echo "::error::apksigner tool not found in $ANDROID_HOME/build-tools"
+            exit 1
+          fi
+          
+          echo "Using apksigner binary: $APKSIGNER"
+          "$APKSIGNER" verify --verbose "$APK" || (echo "::error::APK signing verification failed!" && exit 1)
+          echo "APK signing verification PASSED."
+
+      - name: Upload Release APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+
+      - name: Upload Release AAB Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+
+      - name: Release Build Summary
+        run: |
+          APK_PATH="android/app/build/outputs/apk/release/app-release.apk"
+          AAB_PATH="android/app/build/outputs/bundle/release/app-release.aab"
+          APK_SIZE=$(stat -c%s "$APK_PATH" 2>/dev/null || stat -f%z "$APK_PATH")
+          AAB_SIZE=$(stat -c%s "$AAB_PATH" 2>/dev/null || stat -f%z "$AAB_PATH")
+
+          echo "========================================"
+          echo "ANDROID RELEASE BUILD"
+          echo "========================================"
+          echo "Application ID: app.remote.universal"
+          echo "Version Name:   4.1"
+          echo "Version Code:   49"
+          echo "Target SDK:     36"
+          echo ""
+          echo "APK:"
+          echo "Path:           $APK_PATH"
+          echo "Size:           $APK_SIZE bytes"
+          echo "Signing:        VERIFIED"
+          echo ""
+          echo "AAB:"
+          echo "Path:           $AAB_PATH"
+          echo "Size:           $AAB_SIZE bytes"
+          echo "Release build:  SUCCESS"
+          echo "========================================"
