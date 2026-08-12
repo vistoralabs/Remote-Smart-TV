@@ -22,11 +22,16 @@ function Arrows({
   onKey,
   round,
   disabled,
+  isRing = false,
 }: {
   onKey: (key: Key) => void;
   round: boolean;
   disabled: boolean;
+  isRing?: boolean;
 }) {
+  const btnSize = isRing ? "size-11 min-h-0 min-w-0 p-0" : "size-full max-h-14 max-w-14";
+  const okSize = isRing ? "size-12 min-h-0 min-w-0 p-0 font-bold" : "size-full max-h-14 max-w-14 font-semibold";
+
   return (
     <>
       <span />
@@ -35,9 +40,9 @@ function Arrows({
         onPress={() => onKey("up")}
         round={round}
         disabled={disabled}
-        className="size-full max-h-14 max-w-14 place-self-center"
+        className={cn("place-self-center shadow-sm", btnSize)}
       >
-        <ChevronUp className="size-6 shrink-0" />
+        <ChevronUp className="size-5 shrink-0" />
       </RemoteKey>
       <span />
       <RemoteKey
@@ -45,9 +50,9 @@ function Arrows({
         onPress={() => onKey("left")}
         round={round}
         disabled={disabled}
-        className="size-full max-h-14 max-w-14 place-self-center"
+        className={cn("place-self-center shadow-sm", btnSize)}
       >
-        <ChevronLeft className="size-6 shrink-0" />
+        <ChevronLeft className="size-5 shrink-0" />
       </RemoteKey>
       <RemoteKey
         ariaLabel="OK"
@@ -55,7 +60,7 @@ function Arrows({
         round={round}
         disabled={disabled}
         tone="primary"
-        className="size-full max-h-14 max-w-14 place-self-center font-display text-sm font-semibold tracking-widest"
+        className={cn("place-self-center font-display text-xs tracking-wider shadow-md", okSize)}
       >
         OK
       </RemoteKey>
@@ -64,9 +69,9 @@ function Arrows({
         onPress={() => onKey("right")}
         round={round}
         disabled={disabled}
-        className="size-full max-h-14 max-w-14 place-self-center"
+        className={cn("place-self-center shadow-sm", btnSize)}
       >
-        <ChevronRight className="size-6 shrink-0" />
+        <ChevronRight className="size-5 shrink-0" />
       </RemoteKey>
       <span />
       <RemoteKey
@@ -74,9 +79,9 @@ function Arrows({
         onPress={() => onKey("down")}
         round={round}
         disabled={disabled}
-        className="size-full max-h-14 max-w-14 place-self-center"
+        className={cn("place-self-center shadow-sm", btnSize)}
       >
-        <ChevronDown className="size-6 shrink-0" />
+        <ChevronDown className="size-5 shrink-0" />
       </RemoteKey>
       <span />
     </>
@@ -86,9 +91,11 @@ function Arrows({
 function RingPad({ onKey, disabled }: { onKey: (key: Key) => void; disabled: boolean }) {
   return (
     <div className="relative mx-auto aspect-square w-full max-w-[15rem]">
-      <div className="absolute inset-0 rounded-full border border-border/70 shell-panel" />
-      <div className="absolute inset-2 grid h-[calc(100%-1rem)] w-[calc(100%-1rem)] grid-cols-3 grid-rows-3 place-items-center gap-1">
-        <Arrows onKey={onKey} round disabled={disabled} />
+      {/* Background D-Pad Outer Ring */}
+      <div className="absolute inset-0 rounded-full border border-border/80 shell-panel shadow-inner" />
+      {/* Centered Grid with Padding so buttons stay strictly inside the circle */}
+      <div className="absolute inset-3.5 grid grid-cols-3 grid-rows-3 place-items-center gap-1">
+        <Arrows onKey={onKey} round disabled={disabled} isRing />
       </div>
     </div>
   );
