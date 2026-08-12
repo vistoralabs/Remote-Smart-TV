@@ -38,6 +38,9 @@ jobs:
           distribution: "temurin"
           java-version: "21"
 
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
@@ -79,7 +82,20 @@ jobs:
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease bundleRelease --no-daemon
+          for i in 1 2 3; do
+            echo "=== Attempt $i: Building release binaries with Gradle ==="
+            if ./gradlew assembleRelease bundleRelease --no-daemon; then
+              echo "Gradle release build succeeded on attempt $i."
+              break
+            else
+              if [ $i -eq 3 ]; then
+                echo "::error::Gradle build failed after 3 attempts."
+                exit 1
+              fi
+              echo "Gradle build failed on attempt $i. Retrying in 10 seconds..."
+              sleep 10
+            fi
+          done
 
       - name: Verify Release Artifacts Exist
         run: |
@@ -131,6 +147,8 @@ jobs:
           AAB_PATH="android/app/build/outputs/bundle/release/app-release.aab"
           APK_SIZE=$(stat -c%s "$APK_PATH" 2>/dev/null || stat -f%z "$APK_PATH")
           AAB_SIZE=$(stat -c%s "$AAB_PATH" 2>/dev/null || stat -f%z "$AAB_PATH")
+          APK_SHA256=$(sha256sum "$APK_PATH" | awk '{print $1}')
+          AAB_SHA256=$(sha256sum "$AAB_PATH" | awk '{print $1}')
 
           echo "========================================"
           echo "ANDROID RELEASE BUILD"
@@ -143,10 +161,12 @@ jobs:
           echo "APK:"
           echo "Path:           $APK_PATH"
           echo "Size:           $APK_SIZE bytes"
+          echo "SHA-256:        $APK_SHA256"
           echo "Signing:        VERIFIED"
           echo ""
           echo "AAB:"
           echo "Path:           $AAB_PATH"
           echo "Size:           $AAB_SIZE bytes"
+          echo "SHA-256:        $AAB_SHA256"
           echo "Release build:  SUCCESS"
           echo "========================================"
