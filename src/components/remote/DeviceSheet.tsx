@@ -70,9 +70,10 @@ export function DeviceSheet({
   async function beginWifiPairing(device: AndroidTvDevice) {
     setScanning(true);
     try {
-      await startAndroidTvPairing(device.address);
+      const chosenName = device.name === device.address ? "My TV" : device.name;
+      await startAndroidTvPairing(device.address, chosenName);
       setPairingAddress(device.address);
-      setPairingName(device.name === device.address ? "My TV" : device.name);
+      setPairingName(chosenName);
       toast.info("Enter the 6-character code shown on the TV");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Pairing failed");
@@ -85,7 +86,7 @@ export function DeviceSheet({
     if (!pairingAddress) return;
     setScanning(true);
     try {
-      await finishAndroidTvPairing(pairingCode);
+      await finishAndroidTvPairing(pairingCode, pairingName || "My TV");
       commit(pairingAddress, pairingName || "My TV");
       toast.success("TV paired — remote is ready");
     } catch (error) {

@@ -49,9 +49,12 @@ public class NativeAndroidTvPlugin extends Plugin {
     private SSLSocket pairingSocket;
     private X509Certificate pairingServerCertificate;
     private String pairingHost;
+    private String pairingName;
+
     private SSLSocket remoteSocket;
     private String remoteHost;
     private Thread remoteReader;
+    private volatile long connectionGen = 0L;
     private volatile CountDownLatch remoteReady = new CountDownLatch(1);
     private volatile boolean remoteStarted;
     private static final long CLIENT_REMOTE_FEATURES = 1L | 2L | 32L | 64L | 512L;
@@ -73,7 +76,6 @@ public class NativeAndroidTvPlugin extends Plugin {
         String savedAddress = getSavedAddress();
         if (savedAddress != null) {
             log("INIT", "[ATV] Restored saved pairing: " + savedAddress + " (" + getSavedName() + ")");
-            triggerAutoReconnect();
         }
     }
 
@@ -100,12 +102,22 @@ public class NativeAndroidTvPlugin extends Plugin {
     }
 
     private void savePairedDevice(String address, String name) {
+        if (address == null || address.trim().isEmpty()) return;
+        String finalName = name;
+        if (finalName == null || finalName.trim().isEmpty() || finalName.trim().equals(address.trim())) {
+            String existingName = getSavedName();
+            if (existingName != null && !existingName.equals("Android TV") && !existingName.equals(address.trim())) {
+                finalName = existingName;
+            } else {
+                finalName = "Android TV";
+            }
+        }
         getPrefs().edit()
-                .putString(KEY_PAIRED_ADDRESS, address)
-                .putString(KEY_PAIRED_NAME, name != null ? name : address)
+                .putString(KEY_PAIRED_ADDRESS, address.trim())
+                .putString(KEY_PAIRED_NAME, finalName.trim())
                 .putLong(KEY_PAIRED_TIME, System.currentTimeMillis())
                 .apply();
-        log("PREFS", "[ATV] Saved paired device: " + address + " (" + name + ")");
+        log("PREFS", "[ATV] Saved paired device: address=" + address.trim() + ", name=" + finalName.trim());
     }
 
     private void clearSavedPairingInternal() {
@@ -117,6 +129,13 @@ public class NativeAndroidTvPlugin extends Plugin {
         synchronized (remoteLock) {
             return remoteSocket != null && remoteSocket.isConnected() && !remoteSocket.isClosed() && remoteStarted;
         }
+    }
+
+    private String getConnectionState() {
+        if (getSavedAddress() == null) return "unpaired";
+        if (isConnected()) return "connected";
+        if (isReconnecting) return "connecting";
+        return "paired_disconnected";
     }
 
     private synchronized void triggerAutoReconnect() {
@@ -134,11 +153,11 @@ public class NativeAndroidTvPlugin extends Plugin {
             while (getSavedAddress() != null && !isConnected()) {
                 String targetHost = getSavedAddress();
                 reconnectAttempt++;
-                log("RECONNECT", "[ATV] Reconnect attempt #" + reconnectAttempt + " to " + targetHost);
+                log("RECONNECT", "[ATV] Reconnect attempt #" + reconnectAttempt + " to " + targetHost + " (" + getSavedName() + ")");
                 try {
                     ensureRemote(targetHost);
                     if (isConnected()) {
-                        log("RECONNECT", "[ATV] Session successfully restored to " + targetHost);
+                        log("RECONNECT", "[ATV] Session successfully restored to " + targetHost + " (" + getSavedName() + ")");
                         reconnectAttempt = 0;
                         lastError = null;
                         break;
@@ -148,7 +167,6 @@ public class NativeAndroidTvPlugin extends Plugin {
                     lastError = cleanErr;
                     log("RECONNECT_ERR", "[ATV] Reconnect failed: " + cleanErr);
 
-                    // If certificate authentication permanently failed or TV rejected pairing, clear pairing
                     if (cleanErr.contains("rejected by the TV") || cleanErr.contains("certificate authentication failed")) {
                         log("RECONNECT_ERR", "[ATV] TV explicitly rejected identity certificate; clearing saved pairing");
                         clearSavedPairingInternal();
@@ -156,19 +174,21 @@ public class NativeAndroidTvPlugin extends Plugin {
                         break;
                     }
 
-                    // If host is unreachable, try mDNS rediscovery to update DHCP IP
+                    // DHCP IP Rediscovery: If saved IP is unreachable, scan for device by savedName
                     if (reconnectAttempt >= 2 && reconnectAttempt % 3 == 0) {
-                        log("REDISCOVERY", "[ATV] Saved IP " + targetHost + " unreachable. Scanning for updated DHCP IP...");
+                        log("REDISCOVERY", "[ATV] Saved IP " + targetHost + " unreachable. Scanning mDNS for paired TV '" + getSavedName() + "'...");
                         try {
                             Map<String, String> found = new ConcurrentHashMap<>();
                             mdnsDiscover(found);
                             String savedName = getSavedName();
                             for (Map.Entry<String, String> entry : found.entrySet()) {
-                                if (entry.getValue() != null && entry.getValue().equalsIgnoreCase(savedName)) {
-                                    String newIp = entry.getKey();
-                                    log("REDISCOVERY", "[ATV] Found paired device '" + savedName + "' at new IP: " + newIp);
-                                    savePairedDevice(newIp, savedName);
-                                    targetHost = newIp;
+                                String discIp = entry.getKey();
+                                String discName = entry.getValue();
+                                if (discName != null && !discName.equals(discIp) &&
+                                        (discName.equalsIgnoreCase(savedName) || savedName.equalsIgnoreCase(discName))) {
+                                    log("REDISCOVERY", "[ATV] Found previously paired device '" + savedName + "' at new DHCP IP: " + discIp);
+                                    savePairedDevice(discIp, savedName);
+                                    targetHost = discIp;
                                     break;
                                 }
                             }
@@ -187,9 +207,6 @@ public class NativeAndroidTvPlugin extends Plugin {
         }
     }
 
-    /**
-     * Discovers Android TV / Google TV / Xstream boxes.
-     */
     @PluginMethod
     public void scan(PluginCall call) {
         log("SCAN", "Started TV discovery");
@@ -274,11 +291,13 @@ public class NativeAndroidTvPlugin extends Plugin {
     @PluginMethod
     public void startPairing(PluginCall call) {
         String host = call.getString("address");
+        String name = call.getString("name");
         if (host == null || host.trim().isEmpty()) { call.reject("TV IP address is missing"); return; }
         io.execute(() -> {
             closePairing();
             try {
                 pairingHost = host.trim();
+                pairingName = (name != null && !name.trim().isEmpty() && !name.trim().equals(host.trim())) ? name.trim() : null;
                 pairingStage = "connecting to " + pairingHost + ":6467";
                 log("PAIR", pairingStage);
                 pairingSocket = tls.connect(pairingHost, 6467);
@@ -310,11 +329,13 @@ public class NativeAndroidTvPlugin extends Plugin {
     @PluginMethod
     public void finishPairing(PluginCall call) {
         String code = call.getString("code");
+        String name = call.getString("name");
         if (pairingSocket == null || pairingServerCertificate == null) { call.reject("Start pairing first"); return; }
         if (code == null || !code.trim().matches("(?i)[0-9a-f]{6}")) { call.reject("Enter the 6-character code shown on the TV"); return; }
         io.execute(() -> {
             try {
                 String host = pairingHost;
+                String deviceName = (name != null && !name.trim().isEmpty()) ? name.trim() : pairingName;
                 byte[] secret = pairingSecret(code.trim().toUpperCase(Locale.US));
                 write(pairingSocket.getOutputStream(), pairingEnvelope(AtvProto.bytes(40, AtvProto.bytes(1, secret))));
                 expect(pairingSocket, 41);
@@ -323,7 +344,7 @@ public class NativeAndroidTvPlugin extends Plugin {
                 closePairing();
                 if (host == null) throw new Exception("TV address was lost after pairing");
 
-                savePairedDevice(host, host);
+                savePairedDevice(host, deviceName);
                 ensureRemote(host);
 
                 JSObject result = new JSObject(); result.put("paired", true); call.resolve(result);
@@ -346,6 +367,7 @@ public class NativeAndroidTvPlugin extends Plugin {
         JSObject result = new JSObject();
         result.put("paired", paired);
         result.put("connected", isConnected());
+        result.put("connectionState", getConnectionState());
         result.put("address", savedAddress);
         result.put("name", getSavedName());
         result.put("reconnecting", isReconnecting);
@@ -363,13 +385,15 @@ public class NativeAndroidTvPlugin extends Plugin {
     @PluginMethod
     public void connect(PluginCall call) {
         String host = call.getString("address");
+        String name = call.getString("name");
         if (host == null) host = getSavedAddress();
         if (host == null) { call.reject("TV IP address is missing"); return; }
         final String target = host.trim();
+        final String targetName = name;
         io.execute(() -> {
             try {
                 ensureRemote(target);
-                savePairedDevice(target, target);
+                savePairedDevice(target, targetName);
                 JSObject result = new JSObject(); result.put("connected", true); call.resolve(result);
             } catch (Exception error) {
                 lastError = clean(error);
@@ -452,6 +476,7 @@ public class NativeAndroidTvPlugin extends Plugin {
         }
         result.put("connected", live);
         result.put("paired", savedAddr != null);
+        result.put("connectionState", getConnectionState());
         result.put("address", savedAddr != null ? savedAddr : remoteHost);
         result.put("name", getSavedName());
         result.put("reconnecting", isReconnecting);
@@ -473,7 +498,10 @@ public class NativeAndroidTvPlugin extends Plugin {
         }
         result.put("paired", savedAddr != null);
         result.put("connected", live);
+        result.put("reconnecting", isReconnecting);
+        result.put("connectionState", getConnectionState());
         result.put("savedHost", savedAddr);
+        result.put("savedDeviceName", getSavedName());
         result.put("reconnectAttempt", reconnectAttempt);
         result.put("lastError", lastError);
         result.put("identity", identity != null ? "available" : "missing");
@@ -542,11 +570,13 @@ public class NativeAndroidTvPlugin extends Plugin {
     }
 
     private void ensureRemote(String host) throws Exception {
+        final long thisGen;
         synchronized (remoteLock) {
             if (remoteSocket != null && remoteSocket.isConnected() && !remoteSocket.isClosed()
                     && host.equals(remoteHost) && remoteStarted) return;
             closeRemote();
-            log("REMOTE", "starting 6466 connection to " + host);
+            thisGen = ++connectionGen;
+            log("REMOTE", "starting 6466 connection to " + host + " (gen=" + thisGen + ")");
             try {
                 X509Certificate mine = identity.certificate();
                 log("REMOTE", "client certificate loaded (" + mine.getSubjectDN() + ")");
@@ -574,12 +604,14 @@ public class NativeAndroidTvPlugin extends Plugin {
             remoteFailure = null;
             remoteReady = new CountDownLatch(1);
             SSLSocket socket = remoteSocket;
-            remoteReader = new Thread(() -> remoteLoop(socket), "android-tv-remote-reader");
+            remoteReader = new Thread(() -> remoteLoop(socket, thisGen), "android-tv-remote-reader-" + thisGen);
             remoteReader.start();
         }
         if (!remoteReady.await(12, TimeUnit.SECONDS)) {
             String reason = remoteFailure;
-            closeRemote();
+            synchronized (remoteLock) {
+                if (thisGen == connectionGen) closeRemote();
+            }
             throw new Exception(reason != null ? reason
                     : "remote handshake timed out: TV never sent RemoteStart on 6466");
         }
@@ -589,7 +621,7 @@ public class NativeAndroidTvPlugin extends Plugin {
         }
     }
 
-    private void remoteLoop(SSLSocket socket) {
+    private void remoteLoop(SSLSocket socket, long thisGen) {
         try {
             while (!socket.isClosed()) {
                 byte[] message = AtvProto.readFrame(socket.getInputStream());
@@ -636,13 +668,19 @@ public class NativeAndroidTvPlugin extends Plugin {
                     log("REMOTE", "remote protocol handshake complete");
                     log("REMOTE", "CONNECTED");
                 }
-                if (reply != null) synchronized (remoteLock) { write(socket.getOutputStream(), reply); }
+                if (reply != null) {
+                    synchronized (remoteLock) {
+                        if (thisGen == connectionGen) write(socket.getOutputStream(), reply);
+                    }
+                }
             }
         } catch (Exception error) {
             if (remoteFailure == null) remoteFailure = "6466 session error: " + clean(error);
             log("REMOTE_ERROR", remoteFailure);
             remoteReady.countDown();
-            if (socket == remoteSocket) closeRemote();
+            synchronized (remoteLock) {
+                if (thisGen == connectionGen) closeRemote();
+            }
         }
     }
 
@@ -705,7 +743,7 @@ public class NativeAndroidTvPlugin extends Plugin {
         debugLog.add(time + " [" + area + "] " + message);
         while (debugLog.size() > 100) debugLog.remove(0);
     }
-    private void closePairing() { try { if (pairingSocket != null) pairingSocket.close(); } catch (Exception ignored) {} pairingSocket = null; pairingServerCertificate = null; pairingHost = null; }
+    private void closePairing() { try { if (pairingSocket != null) pairingSocket.close(); } catch (Exception ignored) {} pairingSocket = null; pairingServerCertificate = null; pairingHost = null; pairingName = null; }
     private void closeRemote() {
         remoteStarted = false;
         remoteFeatures = 0;

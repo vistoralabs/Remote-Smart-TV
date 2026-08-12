@@ -68,10 +68,11 @@ export function DebugSheet() {
         section("CONNECTION", [
           `Native bridge: ${hasNativeAndroidTv() ? "available" : "unavailable (browser build)"}`,
           connection ? `Phone Wi-Fi: ${connection.localIp ?? "not detected"}` : null,
-          connection ? `Pairing stage: ${connection.pairingStage}` : null,
+          connection ? `Paired device: ${connection.savedDeviceName ?? "none"} (${connection.savedHost ?? "none"})` : null,
+          connection ? `Connection state: ${connection.connectionState ?? (connection.connected ? "connected" : connection.paired ? "paired_disconnected" : "unpaired")}` : null,
           connection ? `Pairing socket: ${connection.pairing ? "open" : "closed"}` : null,
           connection
-            ? `Remote: ${connection.connected ? `connected to ${connection.currentHost ?? connection.savedHost}` : `paired (${connection.savedHost ?? "none"})`}`
+            ? `Remote: ${connection.connected ? `connected to ${connection.currentHost ?? connection.savedHost}` : connection.reconnecting ? "reconnecting…" : "disconnected"}`
             : null,
           connection ? "Native log:" : null,
           ...(connection ? (connection.log.length ? connection.log : ["No events yet."]) : []),
