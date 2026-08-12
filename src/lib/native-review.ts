@@ -253,6 +253,11 @@ export async function requestReviewNow(trigger = "manual"): Promise<boolean> {
   }
 }
 
+/** Check if running inside native Android app container */
+export function isNativePlatform(): boolean {
+  return isNative();
+}
+
 /** Explicit "Rate this app" tap: send the user to the Play listing. */
 export async function openStoreListing(): Promise<boolean> {
   log("opening Play listing (explicit tap)");
@@ -261,14 +266,19 @@ export async function openStoreListing(): Promise<boolean> {
       const result = await Review.openStore();
       if (result?.openedStore) return true;
     } catch {
-      /* fall through to the web link */
+      /* fall through to market/web link */
     }
   }
   try {
-    window.location.href = PLAY_STORE_URL;
+    if (isNative()) {
+      window.location.href = "market://details?id=app.remote.universal";
+    } else {
+      window.location.href = PLAY_STORE_URL;
+    }
     return true;
   } catch {
-    return false;
+    window.location.href = PLAY_STORE_URL;
+    return true;
   }
 }
 

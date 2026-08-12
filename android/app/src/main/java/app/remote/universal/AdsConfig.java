@@ -11,8 +11,8 @@ public final class AdsConfig {
 
     private AdsConfig() {}
 
-    /** true only in debug/development builds — release always uses production units. */
-    public static final boolean USE_TEST_ADS = BuildConfig.AD_TEST_UNITS;
+    /** Production mode — always false so live units are used exclusively. */
+    public static final boolean USE_TEST_ADS = false;
 
     /** Production application id (also declared in AndroidManifest.xml). */
     public static final String APP_ID = "ca-app-pub-5732060577215447~6117748951";

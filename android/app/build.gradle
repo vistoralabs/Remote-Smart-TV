@@ -20,7 +20,7 @@ android {
         applicationId "app.remote.universal"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 48
+        versionCode 49
         versionName "4.1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
@@ -46,7 +46,7 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-            // Production AdMob units — the only ad ids compiled into a release build.
+            // Production AdMob units
             buildConfigField "String", "AD_BANNER", '"ca-app-pub-5732060577215447/6392367110"'
             buildConfigField "String", "AD_INTERSTITIAL", '"ca-app-pub-5732060577215447/9070501342"'
             buildConfigField "String", "AD_APP_OPEN", '"ca-app-pub-5732060577215447/9134080523"'
@@ -56,11 +56,11 @@ android {
             }
         }
         debug {
-            // Google's official test units — development never touches live ads.
-            buildConfigField "String", "AD_BANNER", '"ca-app-pub-3940256099942544/9214589741"'
-            buildConfigField "String", "AD_INTERSTITIAL", '"ca-app-pub-3940256099942544/1033173712"'
-            buildConfigField "String", "AD_APP_OPEN", '"ca-app-pub-3940256099942544/9257395921"'
-            buildConfigField "boolean", "AD_TEST_UNITS", "true"
+            // Production AdMob units
+            buildConfigField "String", "AD_BANNER", '"ca-app-pub-5732060577215447/6392367110"'
+            buildConfigField "String", "AD_INTERSTITIAL", '"ca-app-pub-5732060577215447/9070501342"'
+            buildConfigField "String", "AD_APP_OPEN", '"ca-app-pub-5732060577215447/9134080523"'
+            buildConfigField "boolean", "AD_TEST_UNITS", "false"
         }
     }
 }

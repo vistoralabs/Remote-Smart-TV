@@ -54,6 +54,8 @@ import {
   shouldShowRating,
   markRatingShown,
   openStoreListing,
+  isNativePlatform,
+  requestReviewNow,
 } from "@/lib/native-review";
 import { keyFeedback } from "@/lib/feedback";
 import {
@@ -113,6 +115,12 @@ export function RemoteApp() {
     noteSessionStart();
     void startAds();
     noteAdShown();
+    const ratingTimer = window.setTimeout(() => {
+      if (shouldShowRating()) {
+        setShowRating(true);
+      }
+    }, 12000);
+    return () => window.clearTimeout(ratingTimer);
   }, []);
 
   const t = useMemo(() => translator(settings.lang), [settings.lang]);
@@ -517,12 +525,19 @@ export function RemoteApp() {
           markRatingShown();
         }}
         onRate={(stars) => {
+          setShowRating(false);
+          markRatingShown();
           if (stars >= 4) {
-            void openStoreListing();
+            if (isNativePlatform()) {
+              void requestReviewNow("custom_dialog").then((launched) => {
+                if (!launched) void openStoreListing();
+              });
+            } else {
+              void openStoreListing();
+            }
           } else {
             window.open("mailto:shivkr6083@gmail.com?subject=Smart TV Remote Feedback");
           }
-          markRatingShown();
         }}
         t={t}
       />
