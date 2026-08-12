@@ -44,9 +44,56 @@ function isH3SwallowedErrorBody(body: string): boolean {
   }
 }
 
+import { DEFAULT_REMOTE_CONFIG } from "./lib/remote-config";
+
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
+      const url = new URL(request.url);
+      if (url.pathname === "/api/config") {
+        return new Response(JSON.stringify(DEFAULT_REMOTE_CONFIG), {
+          headers: {
+            "content-type": "application/json; charset=utf-8",
+            "cache-control": "public, max-age=60, s-maxage=300",
+          },
+        });
+      }
+      if (url.pathname === "/api/announcement") {
+        return new Response(JSON.stringify(DEFAULT_REMOTE_CONFIG.appAnnouncement), {
+          headers: {
+            "content-type": "application/json; charset=utf-8",
+            "cache-control": "public, max-age=60, s-maxage=300",
+          },
+        });
+      }
+      if (url.pathname === "/api/features") {
+        return new Response(JSON.stringify(DEFAULT_REMOTE_CONFIG.features), {
+          headers: {
+            "content-type": "application/json; charset=utf-8",
+            "cache-control": "public, max-age=60, s-maxage=300",
+          },
+        });
+      }
+      if (url.pathname === "/api/version") {
+        return new Response(JSON.stringify(DEFAULT_REMOTE_CONFIG.version), {
+          headers: {
+            "content-type": "application/json; charset=utf-8",
+            "cache-control": "public, max-age=60, s-maxage=300",
+          },
+        });
+      }
+      if (url.pathname === "/api/ir/profiles") {
+        return new Response(
+          JSON.stringify({ status: "ok", cloudProfilesCount: 0, profiles: [] }),
+          {
+            headers: {
+              "content-type": "application/json; charset=utf-8",
+              "cache-control": "public, max-age=300",
+            },
+          },
+        );
+      }
+
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
       return await normalizeCatastrophicSsrResponse(response);
