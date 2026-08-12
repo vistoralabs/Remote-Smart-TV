@@ -99,8 +99,8 @@ export function useConnection(device: Device | null): ConnectionState {
         setConnected(isConnected);
         setHost(state.address ?? device.address);
 
-        // Detect connection drop and trigger reconnection
-        if (wasConnectedRef.current && !isConnected) {
+        // Whenever not connected, automatically attempt reconnection using saved address
+        if (!isConnected && !reconnectingRef.current) {
           void attemptReconnect(state.address ?? device.address);
         }
 
@@ -108,18 +108,28 @@ export function useConnection(device: Device | null): ConnectionState {
       } catch {
         if (alive) {
           setConnected(false);
-          if (wasConnectedRef.current) {
+          if (!reconnectingRef.current) {
             void attemptReconnect(device.address);
           }
           wasConnectedRef.current = false;
         }
       }
     };
+
+    const handleFocus = () => {
+      if (alive) void poll();
+    };
+
     void poll();
     const timer = window.setInterval(poll, 2500);
+    window.addEventListener("visibilitychange", handleFocus);
+    window.addEventListener("focus", handleFocus);
+
     return () => {
       alive = false;
       window.clearInterval(timer);
+      window.removeEventListener("visibilitychange", handleFocus);
+      window.removeEventListener("focus", handleFocus);
     };
   }, [device, managed, tick]);
 
