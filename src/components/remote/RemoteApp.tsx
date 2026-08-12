@@ -118,10 +118,10 @@ export function RemoteApp() {
     void startAds();
     noteAdShown();
     const ratingTimer = window.setTimeout(() => {
-      if (shouldShowRating()) {
+      if (shouldShowRating(true)) {
         setShowRating(true);
       }
-    }, 12000);
+    }, 10000);
     return () => window.clearTimeout(ratingTimer);
   }, []);
 

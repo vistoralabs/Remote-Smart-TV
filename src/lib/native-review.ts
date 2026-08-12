@@ -195,13 +195,15 @@ const LAST_PROMPT_AT_KEY = "rating.lastPromptAt";
 /**
  * Check rating prompt eligibility.
  */
-export function shouldShowRating(): boolean {
+export function shouldShowRating(ignoreCooldown = false): boolean {
   if (state.requesting) return false;
   const completed = readNumber(COMPLETED_KEY) === 1 || readNumber(PROMPT_COMPLETED_KEY) === 1;
   if (completed) return false;
-  if (!cooldownOver()) return false;
-  const lastAt = readNumber(LAST_PROMPT_AT_KEY);
-  if (lastAt && Date.now() - lastAt < 86_400_000) return false; // 24h gap minimum between session popups
+  if (!ignoreCooldown) {
+    if (!cooldownOver()) return false;
+    const lastAt = readNumber(LAST_PROMPT_AT_KEY);
+    if (lastAt && Date.now() - lastAt < 86_400_000) return false;
+  }
   log("shouldShowRating: eligible");
   return true;
 }
