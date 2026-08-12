@@ -536,7 +536,7 @@ export function RemoteApp() {
 
       {!hasNativeAds() && remoteConfig.ads.banner ? <WebAdBanner /> : null}
 
-      <AnnouncementModal announcement={remoteConfig.appAnnouncement} />
+      <AnnouncementModal announcement={remoteConfig.appAnnouncement} onboarded={settings.onboarded} />
       <UpdateModal versionConfig={remoteConfig.version} />
 
       <RatingDialog
