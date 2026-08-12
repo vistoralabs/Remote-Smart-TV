@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "shivkr6083-eng-remote-smart-tv",
+  "name": "remote-smart-tv",
   "compatibility_date": "2026-08-12",
   "compatibility_flags": [
     "nodejs_compat"
