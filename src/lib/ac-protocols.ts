@@ -243,7 +243,61 @@ const SAMSUNG_AC: AcProfile = {
   },
 };
 
-const PROFILES: AcProfile[] = [DAIKIN_ARC, LG_AC, SAMSUNG_AC];
+/* ------------------------------------------------------------------ */
+/* Carrier AC (48-bit frame protocol)                                 */
+/* ------------------------------------------------------------------ */
+function buildCarrierAc(state: AcState): number[] {
+  const pattern: number[] = [4400, 4400];
+  const temp = Math.min(30, Math.max(17, Math.round(state.temperature)));
+  const modeVal = state.mode === "cool" ? 0 : state.mode === "dry" ? 1 : state.mode === "fan" ? 2 : state.mode === "heat" ? 3 : 0;
+  const fanVal = state.fan === "auto" ? 0 : state.fan === "1" ? 1 : state.fan === "2" ? 2 : 3;
+
+  const bytes = [
+    0x4f, 0xb0,
+    (modeVal << 4) | (state.power ? 0x01 : 0x00),
+    ((temp - 17) & 0x0f) << 4 | (fanVal & 0x0f),
+    state.swing ? 0x0f : 0x00,
+    0x00
+  ];
+  bytes[5] = ((bytes[0] ?? 0) + (bytes[1] ?? 0) + (bytes[2] ?? 0) + (bytes[3] ?? 0) + (bytes[4] ?? 0)) & 0xff;
+
+  for (const b of bytes) {
+    for (let i = 0; i < 8; i++) {
+      const bit = (b >>> i) & 1;
+      pattern.push(540, bit ? 1620 : 540);
+    }
+  }
+  pattern.push(540, 20000);
+  return pattern;
+}
+
+const CARRIER_AC: AcProfile = {
+  id: "carrier-ac",
+  label: "Carrier AC",
+  protocol: "carrier-ac (48 bit frame)",
+  frequency: 38000,
+  capabilities: {
+    minTemp: 17,
+    maxTemp: 30,
+    modes: ["auto", "cool", "dry", "fan", "heat"],
+    fans: ["auto", "1", "2", "3"],
+    swing: true,
+    turbo: true,
+    eco: true,
+  },
+  build: buildCarrierAc,
+  defaults: {
+    power: true,
+    temperature: 24,
+    mode: "cool",
+    fan: "auto",
+    swing: false,
+    turbo: false,
+    eco: false,
+  },
+};
+
+const PROFILES: AcProfile[] = [DAIKIN_ARC, LG_AC, SAMSUNG_AC, CARRIER_AC];
 
 /** Stateful AC profile for a brand, or null when only discrete codes exist. */
 export function acProfileFor(brand: string): AcProfile | null {
@@ -251,6 +305,7 @@ export function acProfileFor(brand: string): AcProfile | null {
   if (name.includes("daikin")) return DAIKIN_ARC;
   if (name.includes("lg")) return LG_AC;
   if (name.includes("samsung")) return SAMSUNG_AC;
+  if (name.includes("carrier")) return CARRIER_AC;
   return PROFILES.find((p) => name.includes(p.id.split("-")[0] ?? "")) ?? null;
 }
 

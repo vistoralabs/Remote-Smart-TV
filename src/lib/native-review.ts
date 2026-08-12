@@ -187,21 +187,47 @@ export function reviewSnapshot(): ReviewSnapshot {
  * should be shown. Unlike maybeRequestReview this does not require a native
  * runtime — it is intended for the in-app star dialog.
  */
+const PROMPT_SHOWN_KEY = "rating.promptShown";
+const PROMPT_DISMISSED_KEY = "rating.promptDismissed";
+const PROMPT_COMPLETED_KEY = "rating.promptCompleted";
+const LAST_PROMPT_AT_KEY = "rating.lastPromptAt";
+
+/**
+ * Check rating prompt eligibility.
+ */
 export function shouldShowRating(): boolean {
   if (state.requesting) return false;
-  const completed = readNumber(COMPLETED_KEY) === 1;
+  const completed = readNumber(COMPLETED_KEY) === 1 || readNumber(PROMPT_COMPLETED_KEY) === 1;
   if (completed) return false;
   if (!cooldownOver()) return false;
+  const lastAt = readNumber(LAST_PROMPT_AT_KEY);
+  if (lastAt && Date.now() - lastAt < 86_400_000) return false; // 24h gap minimum between session popups
   log("shouldShowRating: eligible");
   return true;
 }
 
 /**
- * Record that the rating dialog was shown so the 90-day cooldown kicks in.
+ * Record that the rating dialog was shown.
  */
 export function markRatingShown(): void {
+  const count = readNumber(PROMPT_SHOWN_KEY) + 1;
+  write(PROMPT_SHOWN_KEY, String(count));
+  write(LAST_PROMPT_AT_KEY, String(Date.now()));
   write(REQUESTED_KEY, String(Date.now()));
-  log("markRatingShown: cooldown started");
+  log("markRatingShown: tracked in localStorage");
+}
+
+export function markRatingDismissed(): void {
+  const count = readNumber(PROMPT_DISMISSED_KEY) + 1;
+  write(PROMPT_DISMISSED_KEY, String(count));
+  write(REQUESTED_KEY, String(Date.now()));
+  log("markRatingDismissed: 90-day cooldown set");
+}
+
+export function markRatingCompleted(): void {
+  write(COMPLETED_KEY, "1");
+  write(PROMPT_COMPLETED_KEY, "1");
+  log("markRatingCompleted: rating saved");
 }
 
 /**

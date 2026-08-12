@@ -53,6 +53,8 @@ import {
   noteSessionStart,
   shouldShowRating,
   markRatingShown,
+  markRatingDismissed,
+  markRatingCompleted,
   openStoreListing,
   isNativePlatform,
   requestReviewNow,
@@ -522,11 +524,11 @@ export function RemoteApp() {
         open={showRating}
         onClose={() => {
           setShowRating(false);
-          markRatingShown();
+          markRatingDismissed();
         }}
         onRate={(stars) => {
           setShowRating(false);
-          markRatingShown();
+          markRatingCompleted();
           if (stars >= 4) {
             if (isNativePlatform()) {
               void requestReviewNow("custom_dialog").then((launched) => {
