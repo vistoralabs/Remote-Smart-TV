@@ -16,7 +16,7 @@ interface AnnouncementModalProps {
 
 const DISMISSED_TITLE_KEY = "announcement.dismissedTitle";
 const SHOWN_SESSION_KEY = "announcement.shownInSession";
-const DELAY_MS = 2500; // 2.5 second delay after onboarding
+const DELAY_MS = 2500; // 2.5 second delay after main UI loads
 
 export function AnnouncementModal({ announcement, onboarded = true }: AnnouncementModalProps) {
   const [open, setOpen] = useState(false);
@@ -29,6 +29,9 @@ export function AnnouncementModal({ announcement, onboarded = true }: Announceme
   }, []);
 
   useEffect(() => {
+    // Strictly DO NOT show or start timer if onboarding is active
+    if (!onboarded) return;
+
     // Don't show if not enabled or no title
     if (!announcement.enabled || !announcement.title) return;
 
@@ -48,22 +51,20 @@ export function AnnouncementModal({ announcement, onboarded = true }: Announceme
       // ignore storage errors
     }
 
-    // Delay opening to let UI settle (only if onboarded, which is the normal case)
+    // Delay opening by 2.5 seconds to let the main UI render cleanly
     const timeoutId = window.setTimeout(() => {
       if (!isMountedRef.current) return;
       setOpen(true);
     }, DELAY_MS);
 
     return () => window.clearTimeout(timeoutId);
-  }, [announcement]);
+  }, [announcement, onboarded]);
 
   const handleClose = () => {
     setOpen(false);
-    // Mark as dismissed
     try {
       if (announcement.title) {
         window.localStorage.setItem(DISMISSED_TITLE_KEY, announcement.title);
-        // Also mark as shown in this session to prevent re-opening
         const shownKey = `${SHOWN_SESSION_KEY}.${announcement.title}`;
         window.localStorage.setItem(shownKey, "true");
       }
@@ -78,42 +79,54 @@ export function AnnouncementModal({ announcement, onboarded = true }: Announceme
     }
   };
 
-  if (!announcement.enabled || !announcement.title) return null;
+  if (!onboarded || !announcement.enabled || !announcement.title) return null;
+
+  const primaryButtonText = announcement.buttonText?.trim() || "Open App";
 
   return (
     <Dialog open={open} onOpenChange={handleOpen}>
       <DialogContent
-        className="mx-auto w-[92vw] max-w-sm rounded-3xl border p-0 shadow-2xl transition-all"
+        className="relative mx-auto w-[90vw] max-w-sm rounded-3xl border p-0 shadow-2xl transition-all"
         style={{
           backgroundColor: "var(--card, #1a1d23)",
           borderColor: "var(--border, #2c3038)",
           color: "var(--foreground, #f4f5f7)",
-          boxShadow: "0 16px 48px -12px rgba(0, 0, 0, 0.25)",
+          boxShadow: "0 20px 50px -15px rgba(0, 0, 0, 0.4)",
         }}
       >
-        <div className="flex flex-col items-center gap-4 px-5 pb-5 pt-6 text-center">
+        {/* Top-Right Close Button */}
+        <button
+          type="button"
+          onClick={handleClose}
+          aria-label="Close"
+          className="absolute right-3.5 top-3.5 z-10 flex size-8 items-center justify-center rounded-full bg-muted/60 text-muted-foreground transition-all hover:bg-muted hover:text-foreground active:scale-95"
+        >
+          <X className="size-4" />
+        </button>
+
+        <div className="flex flex-col items-center gap-4 px-6 pb-6 pt-7 text-center">
           {announcement.imageUrl ? (
             <img
               src={announcement.imageUrl}
               alt="Announcement"
-              className="max-h-40 w-full rounded-2xl object-cover shadow-md"
+              className="max-h-44 w-full rounded-2xl object-cover shadow-md"
             />
           ) : (
             <div
-              className="flex size-12 items-center justify-center rounded-2xl border"
+              className="flex size-14 items-center justify-center rounded-2xl border"
               style={{
                 backgroundColor: "color-mix(in srgb, var(--primary, #f0a93f) 16%, transparent)",
                 borderColor: "color-mix(in srgb, var(--primary, #f0a93f) 35%, transparent)",
                 color: "var(--primary, #f0a93f)",
               }}
             >
-              <Sparkles className="size-6" />
+              <Sparkles className="size-7" />
             </div>
           )}
 
-          <DialogHeader className="items-center gap-1">
+          <DialogHeader className="items-center gap-1.5">
             <DialogTitle
-              className="text-center font-display text-lg font-bold tracking-tight"
+              className="text-center font-display text-xl font-bold tracking-tight"
               style={{ color: "var(--foreground, #f4f5f7)" }}
             >
               {announcement.title}
@@ -128,28 +141,40 @@ export function AnnouncementModal({ announcement, onboarded = true }: Announceme
             )}
           </DialogHeader>
 
-          <div className="flex w-full flex-col gap-2 pt-1">
-            {announcement.buttonText && announcement.buttonUrl ? (
+          <div className="flex w-full flex-col gap-2.5 pt-2">
+            {announcement.buttonUrl ? (
               <a
                 href={announcement.buttonUrl}
                 target={announcement.buttonUrl.startsWith("http") ? "_blank" : "_self"}
                 rel="noopener noreferrer"
                 onClick={handleClose}
-                className="flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold shadow-md transition-all active:scale-[0.98]"
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl text-sm font-bold shadow-md transition-all active:scale-[0.98]"
                 style={{
                   backgroundColor: "var(--primary, #f0a93f)",
                   color: "var(--primary-foreground, #111111)",
                 }}
               >
-                {announcement.buttonText}
-                <ExternalLink className="size-3.5" />
+                {primaryButtonText}
+                <ExternalLink className="size-4" />
               </a>
-            ) : null}
+            ) : (
+              <button
+                type="button"
+                onClick={handleClose}
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl text-sm font-bold shadow-md transition-all active:scale-[0.98]"
+                style={{
+                  backgroundColor: "var(--primary, #f0a93f)",
+                  color: "var(--primary-foreground, #111111)",
+                }}
+              >
+                {primaryButtonText}
+              </button>
+            )}
 
             <button
               type="button"
               onClick={handleClose}
-              className="h-10 w-full rounded-xl text-xs font-medium transition-all active:scale-[0.98]"
+              className="h-10 w-full rounded-2xl text-xs font-semibold transition-all active:scale-[0.98]"
               style={{
                 backgroundColor: "color-mix(in srgb, var(--muted, #1e2128) 60%, transparent)",
                 color: "var(--muted-foreground, #a7adb8)",
