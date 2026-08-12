@@ -252,7 +252,7 @@ export function RemoteApp() {
   return (
     <main
       dir={isRtl(settings.lang) ? "rtl" : "ltr"}
-      className="mx-auto flex h-dvh w-full max-w-md flex-col gap-1.5 overflow-hidden px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-[max(0.5rem,env(safe-area-inset-top))] sm:gap-2"
+      className="mx-auto flex h-dvh w-full max-w-md flex-col gap-2 overflow-hidden px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-[max(0.5rem,env(safe-area-inset-top))]"
     >
       <header className="flex shrink-0 items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">

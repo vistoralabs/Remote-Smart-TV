@@ -44,11 +44,6 @@ export async function startAds(): Promise<void> {
   started = true;
   try {
     await Ads.initialize();
-    void Ads.showBanner().then((res) => {
-      if (res?.height) {
-        document.documentElement.style.setProperty("--ad-banner-height", `${res.height}px`);
-      }
-    });
     void Ads.preload();
     // Genuine launch: App Open ad when one is available.
     void Ads.maybeShowAppOpen();

@@ -90,11 +90,11 @@ function Arrows({
 
 function RingPad({ onKey, disabled }: { onKey: (key: Key) => void; disabled: boolean }) {
   return (
-    <div className="relative mx-auto aspect-square w-full max-w-[clamp(140px,40vw,175px)]">
+    <div className="relative mx-auto aspect-square w-full max-w-[15rem]">
       {/* Background D-Pad Outer Ring */}
       <div className="absolute inset-0 rounded-full border border-border/80 shell-panel shadow-inner" />
       {/* Centered Grid with Padding so buttons stay strictly inside the circle */}
-      <div className="absolute inset-3 grid grid-cols-3 grid-rows-3 place-items-center gap-1">
+      <div className="absolute inset-3.5 grid grid-cols-3 grid-rows-3 place-items-center gap-1">
         <Arrows onKey={onKey} round disabled={disabled} isRing />
       </div>
     </div>
@@ -103,7 +103,7 @@ function RingPad({ onKey, disabled }: { onKey: (key: Key) => void; disabled: boo
 
 function CrossPad({ onKey, disabled }: { onKey: (key: Key) => void; disabled: boolean }) {
   return (
-    <div className="mx-auto aspect-square w-full max-w-[clamp(140px,40vw,175px)] rounded-3xl border border-border/70 shell-panel p-3">
+    <div className="mx-auto aspect-square w-full max-w-[15rem] rounded-3xl border border-border/70 shell-panel p-3">
       <div className="grid h-full grid-cols-3 grid-rows-3 place-items-center gap-1.5">
         <Arrows onKey={onKey} round={false} disabled={disabled} />
       </div>
@@ -113,7 +113,7 @@ function CrossPad({ onKey, disabled }: { onKey: (key: Key) => void; disabled: bo
 
 function CompactPad({ onKey, disabled }: { onKey: (key: Key) => void; disabled: boolean }) {
   return (
-    <div className="mx-auto aspect-square w-full max-w-[clamp(140px,40vw,175px)] p-1">
+    <div className="mx-auto aspect-square w-full max-w-[15rem] p-1">
       <div className="grid h-full grid-cols-3 grid-rows-3 place-items-center gap-2 [&>button]:size-full">
         <Arrows onKey={onKey} round={false} disabled={disabled} />
       </div>
