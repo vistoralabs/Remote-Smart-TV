@@ -37,17 +37,20 @@ export function hasNativeAds(): boolean {
 
 let started = false;
 
-/** Boot the SDK (consent first) and pre-load full-screen ads only. */
+/** Boot the SDK and load banner + full-screen ads. */
 export async function startAds(): Promise<void> {
-  if (!hasNativeAds() || started) return;
+  if (!hasNativeAds()) return;
+  if (started) return;
   started = true;
   try {
-    document.documentElement.style.removeProperty("--ad-banner-height");
-    // Also hide a banner left attached by an older app process after an upgrade.
-    await Ads.hideBanner();
     await Ads.initialize();
+    void Ads.showBanner().then((res) => {
+      if (res?.height) {
+        document.documentElement.style.setProperty("--ad-banner-height", `${res.height}px`);
+      }
+    });
     void Ads.preload();
-    // Genuine launch: App Open ad when one is (or becomes) available.
+    // Genuine launch: App Open ad when one is available.
     void Ads.maybeShowAppOpen();
   } catch {
     /* ads unavailable — app keeps working */

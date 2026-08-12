@@ -31,6 +31,9 @@ import { RatingDialog } from "@/components/remote/RatingDialog";
 import { VoiceKey } from "@/components/remote/VoiceKey";
 import { DebugSheet } from "@/components/remote/DebugSheet";
 import { SettingsSheet } from "@/components/remote/SettingsSheet";
+import { AnnouncementModal } from "@/components/remote/AnnouncementModal";
+import { UpdateModal } from "@/components/remote/UpdateModal";
+import { WebAdBanner } from "@/components/remote/WebAdBanner";
 import logo from "@/assets/logo.png";
 import { TRANSPORT_LABEL, type Device, type Key, type Transport } from "@/lib/remote-types";
 import { probeCapabilities, sendKey, type Capability } from "@/lib/transports";
@@ -40,11 +43,17 @@ import { cn } from "@/lib/utils";
 import { useConnection } from "@/hooks/use-connection";
 import { applyTheme } from "@/lib/theme";
 import {
+  hasNativeAds,
   setAdCriticalFlow,
   showInterstitialAtBreak,
   showInterstitialOnTransition,
   startAds,
 } from "@/lib/native-ads";
+import {
+  fetchRemoteConfig,
+  DEFAULT_REMOTE_CONFIG,
+  type RemoteConfig,
+} from "@/lib/remote-config";
 import {
   maybeRequestReview,
   noteAdShown,
@@ -92,6 +101,11 @@ export function RemoteApp() {
   const [openIr, setOpenIr] = useState<SavedIrRemote | null>(null);
   const pressCount = useRef(0);
   const [showRating, setShowRating] = useState(false);
+  const [remoteConfig, setRemoteConfig] = useState<RemoteConfig>(DEFAULT_REMOTE_CONFIG);
+
+  useEffect(() => {
+    void fetchRemoteConfig().then((cfg) => setRemoteConfig(cfg));
+  }, []);
 
   useEffect(() => {
     setCapabilities(probeCapabilities());
@@ -519,6 +533,11 @@ export function RemoteApp() {
         </RemoteKey>
         <VoiceKey device={active} connected={connected} label={t("voice")} className="h-full" />
       </div>
+
+      {!hasNativeAds() && remoteConfig.ads.banner ? <WebAdBanner /> : null}
+
+      <AnnouncementModal announcement={remoteConfig.appAnnouncement} />
+      <UpdateModal versionConfig={remoteConfig.version} />
 
       <RatingDialog
         open={showRating}
