@@ -55,6 +55,15 @@ interface EnvBindings {
   ADMIN_SECRET?: string;
 }
 
+interface RemoteConfigDiagnostics {
+  source: "kv" | "fallback" | "error";
+  kvBindingAvailable: boolean;
+  key: string;
+  keyExists: boolean;
+  jsonParseOk: boolean;
+  worker: string;
+}
+
 const KV_CONFIG_KEY = "remote-config:v1";
 
 // Active live test config state (used as live Cloudflare dynamic default when KV is not bound)
@@ -191,6 +200,53 @@ async function saveRemoteConfigToKv(env: unknown, config: RemoteConfig): Promise
   return true;
 }
 
+async function loadRemoteConfigDiagnostics(env: unknown): Promise<RemoteConfigDiagnostics> {
+  const kv = getKvBinding(env);
+  let keyExists = false;
+  let jsonParseOk = false;
+  let source: "kv" | "fallback" | "error" = "fallback";
+
+  if (!kv) {
+    return {
+      source: "fallback",
+      kvBindingAvailable: false,
+      key: KV_CONFIG_KEY,
+      keyExists: false,
+      jsonParseOk: false,
+      worker: "shivkr6083-eng-remote-smart-tv",
+    };
+  }
+
+  try {
+    const raw = await kv.get(KV_CONFIG_KEY);
+    if (raw) {
+      keyExists = true;
+      try {
+        JSON.parse(raw);
+        jsonParseOk = true;
+        source = "kv";
+      } catch {
+        jsonParseOk = false;
+        source = "fallback";
+      }
+    } else {
+      keyExists = false;
+      source = "fallback";
+    }
+  } catch {
+    source = "error";
+  }
+
+  return {
+    source,
+    kvBindingAvailable: true,
+    key: KV_CONFIG_KEY,
+    keyExists,
+    jsonParseOk,
+    worker: "shivkr6083-eng-remote-smart-tv",
+  };
+}
+
 function computeEtag(content: string): string {
   let hash = 0;
   for (let i = 0; i < content.length; i++) {
@@ -200,29 +256,41 @@ function computeEtag(content: string): string {
   return `W/"${Math.abs(hash).toString(36)}"`;
 }
 
-function jsonResponse(body: unknown, request: Request, status = 200, cacheControl = "public, max-age=60, s-maxage=300"): Response {
+function jsonResponse(
+  body: unknown,
+  request: Request,
+  status = 200,
+  cacheControl = "public, max-age=60, s-maxage=300",
+  sourceHeader?: string,
+  keyHeader?: string,
+): Response {
   const jsonString = JSON.stringify(body);
   const etag = computeEtag(jsonString);
+
+  const headers: Record<string, string> = {
+    "content-type": "application/json; charset=utf-8",
+    "cache-control": cacheControl,
+    etag: etag,
+    "access-control-allow-origin": "*",
+  };
+
+  if (sourceHeader) {
+    headers["X-Remote-Config-Source"] = sourceHeader;
+  }
+  if (keyHeader) {
+    headers["X-Remote-Config-Key"] = keyHeader;
+  }
 
   if (request.headers.get("if-none-match") === etag) {
     return new Response(null, {
       status: 304,
-      headers: {
-        "cache-control": cacheControl,
-        etag: etag,
-        "access-control-allow-origin": "*",
-      },
+      headers,
     });
   }
 
   return new Response(jsonString, {
     status: status,
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-      "cache-control": cacheControl,
-      etag: etag,
-      "access-control-allow-origin": "*",
-    },
+    headers,
   });
 }
 
@@ -231,6 +299,14 @@ export default {
     try {
       const url = new URL(request.url);
 
+      // Diagnostic endpoint for Remote Config
+      if (url.pathname === "/api/config/debug") {
+        const diagnostics = await loadRemoteConfigDiagnostics(env);
+        console.log(`[RemoteConfig] /api/config/debug - source: ${diagnostics.source}`);
+        const cacheControl = "public, max-age=0, must-revalidate, s-maxage=0";
+        return jsonResponse(diagnostics, request, 200, cacheControl);
+      }
+
       // Public Remote Config Read Endpoints
       if (url.pathname === "/api/config") {
         const configWithSource = await loadRemoteConfigFromKv(env);
@@ -238,7 +314,7 @@ export default {
         console.log(`[RemoteConfig] /api/config served from ${_source || "unknown"}`);
         // Use no-cache for config endpoint during testing, can be adjusted based on env
         const cacheControl = "public, max-age=0, must-revalidate, s-maxage=0";
-        return jsonResponse(config, request, 200, cacheControl);
+        return jsonResponse(config, request, 200, cacheControl, _source, KV_CONFIG_KEY);
       }
 
       if (url.pathname === "/api/announcement") {
@@ -246,7 +322,7 @@ export default {
         const { _source } = configWithSource;
         console.log(`[RemoteConfig] /api/announcement served from ${_source || "unknown"}`);
         const cacheControl = "public, max-age=0, must-revalidate, s-maxage=0";
-        return jsonResponse(configWithSource.appAnnouncement, request, 200, cacheControl);
+        return jsonResponse(configWithSource.appAnnouncement, request, 200, cacheControl, _source, KV_CONFIG_KEY);
       }
 
       if (url.pathname === "/api/features") {
@@ -254,7 +330,7 @@ export default {
         const { _source } = configWithSource;
         console.log(`[RemoteConfig] /api/features served from ${_source || "unknown"}`);
         const cacheControl = "public, max-age=0, must-revalidate, s-maxage=0";
-        return jsonResponse(configWithSource.features, request, 200, cacheControl);
+        return jsonResponse(configWithSource.features, request, 200, cacheControl, _source, KV_CONFIG_KEY);
       }
 
       if (url.pathname === "/api/version") {
@@ -262,7 +338,7 @@ export default {
         const { _source } = configWithSource;
         console.log(`[RemoteConfig] /api/version served from ${_source || "unknown"}`);
         const cacheControl = "public, max-age=0, must-revalidate, s-maxage=0";
-        return jsonResponse(configWithSource.version, request, 200, cacheControl);
+        return jsonResponse(configWithSource.version, request, 200, cacheControl, _source, KV_CONFIG_KEY);
       }
 
       if (url.pathname === "/api/ir/profiles") {
