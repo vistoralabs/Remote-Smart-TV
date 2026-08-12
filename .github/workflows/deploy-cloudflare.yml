@@ -1,0 +1,62 @@
+name: Deploy Cloudflare Worker
+
+# Builds and deploys the Cloudflare Worker independently from Android build.
+# The Worker includes the Nitro SSR server with Remote Config diagnostics.
+# Deployment is separate so Android build failures don't block Worker updates.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "src/server.ts"
+      - "src/lib/remote-config.ts"
+      - "vite.config.ts"
+      - "wrangler.json"
+      - "tsconfig.json"
+      - "package.json"
+      - ".github/workflows/deploy-cloudflare.yml"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: cloudflare-deployment
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run TypeScript type check
+        run: bunx tsc --noEmit
+
+      - name: Build web and Cloudflare Worker
+        run: bun run build
+
+      - name: Validate wrangler.json
+        run: bunx wrangler deploy --dry-run
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Deploy to Cloudflare Workers
+        run: bunx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Verify deployment
+        run: |
+          echo "✅ Worker deployed successfully"
+          echo "Endpoint: https://remote-smart-tv.vistora.workers.dev"
+          echo "Test endpoints:"
+          echo "  GET /api/config"
+          echo "  GET /api/announcement"
+          echo "  GET /api/features"
+          echo "  GET /api/version"
