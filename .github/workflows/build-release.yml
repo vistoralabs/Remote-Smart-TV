@@ -25,7 +25,9 @@ jobs:
         run: npm ci
 
       - name: Build Web Bundle
-        run: npm run build
+        run: |
+          npm run build
+          npm run build:mobile
 
       - name: Sync Capacitor Android Project
         run: npx cap sync android
