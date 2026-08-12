@@ -1,6 +1,7 @@
 package app.remote.universal;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.net.nsd.NsdManager;
 import android.net.nsd.NsdServiceInfo;
 import android.net.wifi.WifiManager;
@@ -37,6 +38,11 @@ import javax.net.ssl.SSLSocket;
 
 @CapacitorPlugin(name = "NativeAndroidTv")
 public class NativeAndroidTvPlugin extends Plugin {
+    private static final String PREFS_NAME = "atv_paired_device_v1";
+    private static final String KEY_PAIRED_ADDRESS = "paired_address";
+    private static final String KEY_PAIRED_NAME = "paired_name";
+    private static final String KEY_PAIRED_TIME = "paired_time";
+
     private final ExecutorService io = Executors.newCachedThreadPool();
     private AtvIdentity identity;
     private AtvTls tls;
@@ -55,17 +61,137 @@ public class NativeAndroidTvPlugin extends Plugin {
     private volatile String pairingStage = "idle";
     private volatile String remoteFailure;
 
-    @Override public void load() {
+    private volatile boolean isReconnecting = false;
+    private volatile int reconnectAttempt = 0;
+    private volatile String lastError = null;
+
+    @Override
+    public void load() {
         identity = new AtvIdentity(getContext());
         tls = new AtvTls(identity);
+
+        String savedAddress = getSavedAddress();
+        if (savedAddress != null) {
+            log("INIT", "[ATV] Restored saved pairing: " + savedAddress + " (" + getSavedName() + ")");
+            triggerAutoReconnect();
+        }
+    }
+
+    @Override
+    protected void handleOnResume() {
+        super.handleOnResume();
+        String savedAddress = getSavedAddress();
+        if (savedAddress != null && !isConnected()) {
+            log("LIFECYCLE", "[ATV] App resumed: triggering auto-reconnect to " + savedAddress);
+            triggerAutoReconnect();
+        }
+    }
+
+    private SharedPreferences getPrefs() {
+        return getContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+    }
+
+    private String getSavedAddress() {
+        return getPrefs().getString(KEY_PAIRED_ADDRESS, null);
+    }
+
+    private String getSavedName() {
+        return getPrefs().getString(KEY_PAIRED_NAME, "Android TV");
+    }
+
+    private void savePairedDevice(String address, String name) {
+        getPrefs().edit()
+                .putString(KEY_PAIRED_ADDRESS, address)
+                .putString(KEY_PAIRED_NAME, name != null ? name : address)
+                .putLong(KEY_PAIRED_TIME, System.currentTimeMillis())
+                .apply();
+        log("PREFS", "[ATV] Saved paired device: " + address + " (" + name + ")");
+    }
+
+    private void clearSavedPairingInternal() {
+        getPrefs().edit().clear().apply();
+        log("PREFS", "[ATV] Saved pairing cleared");
+    }
+
+    private boolean isConnected() {
+        synchronized (remoteLock) {
+            return remoteSocket != null && remoteSocket.isConnected() && !remoteSocket.isClosed() && remoteStarted;
+        }
+    }
+
+    private synchronized void triggerAutoReconnect() {
+        String address = getSavedAddress();
+        if (address == null || isConnected() || isReconnecting) return;
+        isReconnecting = true;
+        io.execute(this::autoReconnectLoop);
+    }
+
+    private void autoReconnectLoop() {
+        long[] backoffs = {2000L, 4000L, 8000L, 15000L, 30000L};
+        int backoffIdx = 0;
+
+        try {
+            while (getSavedAddress() != null && !isConnected()) {
+                String targetHost = getSavedAddress();
+                reconnectAttempt++;
+                log("RECONNECT", "[ATV] Reconnect attempt #" + reconnectAttempt + " to " + targetHost);
+                try {
+                    ensureRemote(targetHost);
+                    if (isConnected()) {
+                        log("RECONNECT", "[ATV] Session successfully restored to " + targetHost);
+                        reconnectAttempt = 0;
+                        lastError = null;
+                        break;
+                    }
+                } catch (Exception error) {
+                    String cleanErr = clean(error);
+                    lastError = cleanErr;
+                    log("RECONNECT_ERR", "[ATV] Reconnect failed: " + cleanErr);
+
+                    // If certificate authentication permanently failed or TV rejected pairing, clear pairing
+                    if (cleanErr.contains("rejected by the TV") || cleanErr.contains("certificate authentication failed")) {
+                        log("RECONNECT_ERR", "[ATV] TV explicitly rejected identity certificate; clearing saved pairing");
+                        clearSavedPairingInternal();
+                        closeRemote();
+                        break;
+                    }
+
+                    // If host is unreachable, try mDNS rediscovery to update DHCP IP
+                    if (reconnectAttempt >= 2 && reconnectAttempt % 3 == 0) {
+                        log("REDISCOVERY", "[ATV] Saved IP " + targetHost + " unreachable. Scanning for updated DHCP IP...");
+                        try {
+                            Map<String, String> found = new ConcurrentHashMap<>();
+                            mdnsDiscover(found);
+                            String savedName = getSavedName();
+                            for (Map.Entry<String, String> entry : found.entrySet()) {
+                                if (entry.getValue() != null && entry.getValue().equalsIgnoreCase(savedName)) {
+                                    String newIp = entry.getKey();
+                                    log("REDISCOVERY", "[ATV] Found paired device '" + savedName + "' at new IP: " + newIp);
+                                    savePairedDevice(newIp, savedName);
+                                    targetHost = newIp;
+                                    break;
+                                }
+                            }
+                        } catch (Exception ignored) {}
+                    }
+                }
+
+                long delay = backoffs[Math.min(backoffIdx, backoffs.length - 1)];
+                backoffIdx++;
+                Thread.sleep(delay);
+            }
+        } catch (InterruptedException ignored) {
+            Thread.currentThread().interrupt();
+        } finally {
+            isReconnecting = false;
+        }
     }
 
     /**
-     * Discovers Android TV / Google TV / Xstream boxes twice over: mDNS gives the
-     * friendly name the box advertises (for example XstreamIPTV1-VT), the subnet
-     * sweep catches boxes whose multicast replies are filtered by the router.
+     * Discovers Android TV / Google TV / Xstream boxes.
      */
-    @PluginMethod public void scan(PluginCall call) {
+    @PluginMethod
+    public void scan(PluginCall call) {
         log("SCAN", "Started TV discovery");
         io.execute(() -> {
             try {
@@ -104,13 +230,12 @@ public class NativeAndroidTvPlugin extends Plugin {
                 JSObject result = new JSObject();
                 result.put("devices", devices);
                 result.put("localIp", prefix == null ? null : prefix + "x");
-                log("SCAN", "Finished: " + found.size() + " device(s), network " + (prefix == null ? "unavailable" : prefix + "x"));
+                log("SCAN", "Finished: " + found.size() + " device(s)");
                 call.resolve(result);
             } catch (Exception error) { log("SCAN_ERROR", clean(error)); call.reject(clean(error)); }
         });
     }
 
-    /** Blocking mDNS sweep for the Android TV remote service. */
     private void mdnsDiscover(Map<String, String> found) throws Exception {
         NsdManager nsd = (NsdManager) getContext().getApplicationContext().getSystemService(Context.NSD_SERVICE);
         if (nsd == null) return;
@@ -146,8 +271,8 @@ public class NativeAndroidTvPlugin extends Plugin {
         }
     }
 
-
-    @PluginMethod public void startPairing(PluginCall call) {
+    @PluginMethod
+    public void startPairing(PluginCall call) {
         String host = call.getString("address");
         if (host == null || host.trim().isEmpty()) { call.reject("TV IP address is missing"); return; }
         io.execute(() -> {
@@ -182,7 +307,8 @@ public class NativeAndroidTvPlugin extends Plugin {
         });
     }
 
-    @PluginMethod public void finishPairing(PluginCall call) {
+    @PluginMethod
+    public void finishPairing(PluginCall call) {
         String code = call.getString("code");
         if (pairingSocket == null || pairingServerCertificate == null) { call.reject("Start pairing first"); return; }
         if (code == null || !code.trim().matches("(?i)[0-9a-f]{6}")) { call.reject("Enter the 6-character code shown on the TV"); return; }
@@ -196,7 +322,10 @@ public class NativeAndroidTvPlugin extends Plugin {
                 log("PAIR", "TV accepted the code; certificate persisted for reuse");
                 closePairing();
                 if (host == null) throw new Exception("TV address was lost after pairing");
+
+                savePairedDevice(host, host);
                 ensureRemote(host);
+
                 JSObject result = new JSObject(); result.put("paired", true); call.resolve(result);
             } catch (Exception error) {
                 pairingStage = "paired, remote failed: " + clean(error);
@@ -207,119 +336,169 @@ public class NativeAndroidTvPlugin extends Plugin {
         });
     }
 
-    @PluginMethod public void connect(PluginCall call) {
+    @PluginMethod
+    public void restore(PluginCall call) {
+        String savedAddress = getSavedAddress();
+        boolean paired = savedAddress != null;
+        if (paired && !isConnected()) {
+            triggerAutoReconnect();
+        }
+        JSObject result = new JSObject();
+        result.put("paired", paired);
+        result.put("connected", isConnected());
+        result.put("address", savedAddress);
+        result.put("name", getSavedName());
+        result.put("reconnecting", isReconnecting);
+        result.put("lastError", lastError);
+        call.resolve(result);
+    }
+
+    @PluginMethod
+    public void clearPairing(PluginCall call) {
+        clearSavedPairingInternal();
+        closeRemote();
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void connect(PluginCall call) {
         String host = call.getString("address");
+        if (host == null) host = getSavedAddress();
         if (host == null) { call.reject("TV IP address is missing"); return; }
+        final String target = host.trim();
         io.execute(() -> {
             try {
-                ensureRemote(host.trim());
+                ensureRemote(target);
+                savePairedDevice(target, target);
                 JSObject result = new JSObject(); result.put("connected", true); call.resolve(result);
-            } catch (Exception error) { closeRemote(); call.reject("Remote connection failed: " + clean(error)); }
+            } catch (Exception error) {
+                lastError = clean(error);
+                call.reject("Remote connection failed: " + clean(error));
+            }
         });
     }
 
-    @PluginMethod public void sendKey(PluginCall call) {
+    @PluginMethod
+    public void sendKey(PluginCall call) {
         String host = call.getString("address");
+        if (host == null) host = getSavedAddress();
         String key = call.getString("key");
         if (host == null || key == null) { call.reject("TV or key is missing"); return; }
+        final String target = host.trim();
         io.execute(() -> {
             try {
                 int code = keyCode(key);
                 if (code < 0) throw new Exception("This button is not supported by Android TV");
-                ensureRemote(host.trim());
-                // RemoteKeyInject is key_code=1, direction=2. The previous build
-                // swapped these fields, making SHORT (3) the key code and the
-                // Android key code an invalid direction.
+                ensureRemote(target);
                 byte[] inject = AtvProto.join(AtvProto.field(1, code), AtvProto.field(2, 3));
                 synchronized (remoteLock) { write(remoteSocket.getOutputStream(), AtvProto.bytes(10, inject)); }
                 log("REMOTE_KEY", key.toUpperCase(Locale.US) + " sent (keyCode=" + code + ", direction=SHORT)");
                 JSObject result = new JSObject(); result.put("sent", true); call.resolve(result);
-            } catch (Exception error) { closeRemote(); call.reject(clean(error)); }
+            } catch (Exception error) {
+                lastError = clean(error);
+                call.reject(clean(error));
+            }
         });
     }
 
-    /** Types text on the box by injecting the matching Android key codes. */
-    @PluginMethod public void sendText(PluginCall call) {
+    @PluginMethod
+    public void sendText(PluginCall call) {
         String host = call.getString("address");
+        if (host == null) host = getSavedAddress();
         String text = call.getString("text");
         if (host == null || text == null) { call.reject("TV or text is missing"); return; }
+        final String target = host.trim();
         io.execute(() -> {
             try {
                 log("INPUT", "sending text: \"" + text + "\" (" + text.length() + " chars)");
-                ensureRemote(host.trim());
+                ensureRemote(target);
                 int sent = 0, skipped = 0;
                 for (char character : text.toCharArray()) {
                     int[] stroke = charCode(character);
                     if (stroke == null) { skipped++; continue; }
-                    log("INPUT", "text message encoded: char='" + character + "' keyCode="
-                            + stroke[0] + (stroke[1] == 1 ? " +shift" : ""));
                     injectKey(stroke[0], stroke[1] == 1);
                     sent++;
                     Thread.sleep(35);
                 }
-                log("INPUT", "text sent successfully: " + sent + " key event(s), " + skipped + " unsupported");
                 JSObject result = new JSObject(); result.put("sent", true); result.put("keys", sent); call.resolve(result);
-            } catch (Exception error) { log("INPUT", "input error: " + clean(error)); closeRemote(); call.reject(clean(error)); }
+            } catch (Exception error) { lastError = clean(error); call.reject(clean(error)); }
         });
     }
 
-    /** Opens an app on the box through the remote app-link request. */
-    @PluginMethod public void launchApp(PluginCall call) {
+    @PluginMethod
+    public void launchApp(PluginCall call) {
         String host = call.getString("address");
+        if (host == null) host = getSavedAddress();
         String link = call.getString("link");
         if (host == null || link == null || link.trim().isEmpty()) { call.reject("TV or app link is missing"); return; }
+        final String target = host.trim();
         io.execute(() -> {
             try {
-                ensureRemote(host.trim());
+                ensureRemote(target);
                 byte[] request = AtvProto.bytes(90, AtvProto.string(1, link.trim()));
                 synchronized (remoteLock) { write(remoteSocket.getOutputStream(), request); }
                 JSObject result = new JSObject(); result.put("sent", true); call.resolve(result);
-            } catch (Exception error) { closeRemote(); call.reject(clean(error)); }
+            } catch (Exception error) { lastError = clean(error); call.reject(clean(error)); }
         });
     }
 
-    /** Live transport state for the diagnostics screen. */
-    @PluginMethod public void state(PluginCall call) {
+    @PluginMethod
+    public void state(PluginCall call) {
         JSObject result = new JSObject();
-        boolean live;
+        boolean live = isConnected();
+        String savedAddr = getSavedAddress();
         synchronized (remoteLock) {
-            live = remoteSocket != null && remoteSocket.isConnected() && !remoteSocket.isClosed() && remoteStarted;
-            result.put("host", remoteHost);
+            result.put("host", remoteHost != null ? remoteHost : savedAddr);
         }
         result.put("connected", live);
+        result.put("paired", savedAddr != null);
+        result.put("address", savedAddr != null ? savedAddr : remoteHost);
+        result.put("name", getSavedName());
+        result.put("reconnecting", isReconnecting);
+        result.put("reconnectAttempts", reconnectAttempt);
+        result.put("lastError", lastError);
         result.put("pairing", pairingSocket != null);
         result.put("localIp", localPrefix() == null ? null : localPrefix() + "x");
         result.put("certificate", identity != null);
         call.resolve(result);
     }
 
-    @PluginMethod public void diagnostics(PluginCall call) {
+    @PluginMethod
+    public void diagnostics(PluginCall call) {
         JSObject result = new JSObject();
-        boolean live;
+        boolean live = isConnected();
+        String savedAddr = getSavedAddress();
         synchronized (remoteLock) {
-            live = remoteSocket != null && remoteSocket.isConnected() && !remoteSocket.isClosed() && remoteStarted;
-            result.put("host", remoteHost);
+            result.put("currentHost", remoteHost);
         }
+        result.put("paired", savedAddr != null);
+        result.put("connected", live);
+        result.put("savedHost", savedAddr);
+        result.put("reconnectAttempt", reconnectAttempt);
+        result.put("lastError", lastError);
+        result.put("identity", identity != null ? "available" : "missing");
         result.put("appVersion", "2.7");
         result.put("time", new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(new Date()));
         String prefix = localPrefix();
         result.put("localIp", prefix == null ? null : prefix + "x");
         result.put("pairingStage", pairingStage);
         result.put("pairing", pairingSocket != null && !pairingSocket.isClosed());
-        result.put("connected", live);
         JSArray entries = new JSArray();
         for (String entry : debugLog) entries.put(entry);
         result.put("log", entries);
         call.resolve(result);
     }
 
-    @PluginMethod public void clearDiagnostics(PluginCall call) {
+    @PluginMethod
+    public void clearDiagnostics(PluginCall call) {
         debugLog.clear();
         pairingStage = "idle";
+        lastError = null;
         call.resolve();
     }
 
-    @PluginMethod public void disconnect(PluginCall call) {
+    @PluginMethod
+    public void disconnect(PluginCall call) {
         closeRemote();
         call.resolve();
     }
@@ -336,7 +515,6 @@ public class NativeAndroidTvPlugin extends Plugin {
         synchronized (remoteLock) { write(remoteSocket.getOutputStream(), AtvProto.bytes(10, inject)); }
     }
 
-    /** Android KeyEvent code plus a shift flag for one character. */
     private static int[] charCode(char character) {
         if (character >= 'a' && character <= 'z') return new int[] { 29 + (character - 'a'), 0 };
         if (character >= 'A' && character <= 'Z') return new int[] { 29 + (character - 'A'), 1 };
@@ -363,13 +541,6 @@ public class NativeAndroidTvPlugin extends Plugin {
         }
     }
 
-
-
-    /**
-     * Post-pairing handoff. The pairing socket on 6467 is already closed by the
-     * caller; this opens a brand new TLS session on 6466 using the SAME persisted
-     * client certificate/private key and completes the remote-session handshake.
-     */
     private void ensureRemote(String host) throws Exception {
         synchronized (remoteLock) {
             if (remoteSocket != null && remoteSocket.isConnected() && !remoteSocket.isClosed()
@@ -475,7 +646,6 @@ public class NativeAndroidTvPlugin extends Plugin {
         }
     }
 
-
     private byte[] pairingSecret(String code) throws Exception {
         RSAPublicKey client = (RSAPublicKey) identity.certificate().getPublicKey();
         RSAPublicKey server = (RSAPublicKey) pairingServerCertificate.getPublicKey();
@@ -504,8 +674,6 @@ public class NativeAndroidTvPlugin extends Plugin {
         byte[] response = AtvProto.readFrame(socket.getInputStream());
         long status = AtvProto.firstVarint(response, 2);
         if (status != 200) throw new Exception("TV pairing status " + status);
-        // Acknowledgment messages are valid zero-byte protobuf messages. Testing
-        // nested(...).length rejected those valid ACKs as though the field was absent.
         if (!AtvProto.hasField(response, field))
             throw new Exception("TV sent pairing step " + AtvProto.firstField(response) + " instead of " + field);
     }

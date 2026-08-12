@@ -10,7 +10,10 @@ export interface AndroidTvState {
   connected: boolean;
   paired: boolean;
   address?: string | null;
+  name?: string | null;
   localIp?: string | null;
+  reconnecting?: boolean;
+  reconnectAttempts?: number;
   lastError?: string | null;
 }
 
@@ -20,8 +23,13 @@ export interface AndroidTvDiagnostics {
   localIp?: string | null;
   pairingStage: string;
   pairing: boolean;
+  paired?: boolean;
   connected: boolean;
-  host?: string | null;
+  savedHost?: string | null;
+  currentHost?: string | null;
+  reconnectAttempt?: number;
+  lastError?: string | null;
+  identity?: string;
   log: string[];
 }
 
@@ -29,6 +37,8 @@ interface NativeAndroidTvPlugin {
   scan: () => Promise<{ devices: AndroidTvDevice[]; localIp?: string | null }>;
   startPairing: (options: { address: string }) => Promise<{ codeRequired: boolean }>;
   finishPairing: (options: { code: string }) => Promise<{ paired: boolean }>;
+  restore: () => Promise<AndroidTvState>;
+  clearPairing: () => Promise<void>;
   connect: (options: { address: string }) => Promise<{ connected: boolean }>;
   sendKey: (options: { address: string; key: Key }) => Promise<{ sent: boolean }>;
   sendText: (options: { address: string; text: string }) => Promise<{ sent: boolean }>;
@@ -58,6 +68,14 @@ export async function startAndroidTvPairing(address: string): Promise<void> {
 
 export async function finishAndroidTvPairing(code: string): Promise<void> {
   await NativeAndroidTv.finishPairing({ code });
+}
+
+export async function restoreAndroidTvConnection(): Promise<AndroidTvState> {
+  return NativeAndroidTv.restore();
+}
+
+export async function clearAndroidTvPairing(): Promise<void> {
+  await NativeAndroidTv.clearPairing();
 }
 
 export async function sendAndroidTvKey(address: string, key: Key): Promise<void> {

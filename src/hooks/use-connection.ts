@@ -1,13 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { androidTvState, hasNativeAndroidTv, reconnectAndroidTv } from "@/lib/native-android-tv";
+import {
+  androidTvState,
+  restoreAndroidTvConnection,
+  hasNativeAndroidTv,
+  reconnectAndroidTv,
+} from "@/lib/native-android-tv";
 import type { Device } from "@/lib/remote-types";
 
 export interface ConnectionState {
   /** True only when the 6466 remote session is authenticated and ready. */
   connected: boolean;
+  /** True if a paired TV exists in native SharedPreferences. */
+  paired: boolean;
   /** True while an automatic reconnection attempt is in progress. */
   reconnecting: boolean;
   host: string | null;
+  lastError: string | null;
   refresh: () => void;
 }
 
@@ -26,12 +34,12 @@ export function useConnection(device: Device | null): ConnectionState {
     device && device.transport === "wifi" && device.brand === "androidtv" && hasNativeAndroidTv(),
   );
   const [connected, setConnected] = useState(false);
+  const [paired, setPaired] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   const [host, setHost] = useState<string | null>(null);
+  const [lastError, setLastError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
 
-  // Track previous connected value to detect drops
-  const wasConnectedRef = useRef(false);
   // Track active reconnection to avoid overlapping attempts
   const reconnectingRef = useRef(false);
 
@@ -40,17 +48,19 @@ export function useConnection(device: Device | null): ConnectionState {
   useEffect(() => {
     if (!device) {
       setConnected(false);
+      setPaired(false);
       setReconnecting(false);
       setHost(null);
-      wasConnectedRef.current = false;
+      setLastError(null);
       reconnectingRef.current = false;
       return;
     }
     if (!managed) {
       setConnected(true);
+      setPaired(true);
       setReconnecting(false);
       setHost(device.address);
-      wasConnectedRef.current = false;
+      setLastError(null);
       reconnectingRef.current = false;
       return;
     }
@@ -76,7 +86,6 @@ export function useConnection(device: Device | null): ConnectionState {
         if (success) {
           setConnected(true);
           setReconnecting(false);
-          wasConnectedRef.current = true;
           reconnectingRef.current = false;
           return;
         }
@@ -84,7 +93,6 @@ export function useConnection(device: Device | null): ConnectionState {
         backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);
       }
 
-      // Exhausted all retries — give up
       if (alive) {
         setReconnecting(false);
       }
@@ -96,22 +104,21 @@ export function useConnection(device: Device | null): ConnectionState {
         const state = await androidTvState();
         if (!alive) return;
         const isConnected = Boolean(state.connected);
+        const isPaired = Boolean(state.paired);
         setConnected(isConnected);
+        setPaired(isPaired);
         setHost(state.address ?? device.address);
+        setLastError(state.lastError ?? null);
 
-        // Whenever not connected, automatically attempt reconnection using saved address
-        if (!isConnected && !reconnectingRef.current) {
+        if (isPaired && !isConnected && !reconnectingRef.current) {
           void attemptReconnect(state.address ?? device.address);
         }
-
-        wasConnectedRef.current = isConnected;
       } catch {
         if (alive) {
           setConnected(false);
           if (!reconnectingRef.current) {
             void attemptReconnect(device.address);
           }
-          wasConnectedRef.current = false;
         }
       }
     };
@@ -120,7 +127,14 @@ export function useConnection(device: Device | null): ConnectionState {
       if (alive) void poll();
     };
 
-    void poll();
+    // On initial mount, trigger native restore
+    void restoreAndroidTvConnection().then((st) => {
+      if (!alive) return;
+      if (st.paired) setPaired(true);
+      if (st.connected) setConnected(true);
+      void poll();
+    });
+
     const timer = window.setInterval(poll, 2500);
     window.addEventListener("visibilitychange", handleFocus);
     window.addEventListener("focus", handleFocus);
@@ -133,5 +147,5 @@ export function useConnection(device: Device | null): ConnectionState {
     };
   }, [device, managed, tick]);
 
-  return { connected, reconnecting, host, refresh };
+  return { connected, paired, reconnecting, host, lastError, refresh };
 }

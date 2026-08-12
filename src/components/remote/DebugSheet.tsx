@@ -71,7 +71,7 @@ export function DebugSheet() {
           connection ? `Pairing stage: ${connection.pairingStage}` : null,
           connection ? `Pairing socket: ${connection.pairing ? "open" : "closed"}` : null,
           connection
-            ? `Remote: ${connection.connected ? `connected to ${connection.host}` : "not connected"}`
+            ? `Remote: ${connection.connected ? `connected to ${connection.currentHost ?? connection.savedHost}` : `paired (${connection.savedHost ?? "none"})`}`
             : null,
           connection ? "Native log:" : null,
           ...(connection ? (connection.log.length ? connection.log : ["No events yet."]) : []),

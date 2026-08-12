@@ -164,7 +164,7 @@ export function RemoteApp() {
     [devices, activeId],
   );
   const active = activeDevice;
-  const { connected } = useConnection(activeDevice);
+  const { connected, reconnecting } = useConnection(activeDevice);
 
   // Discovery/pairing is never interrupted (DeviceSheet raises the critical flag);
   // a freshly linked TV is a genuine transition, so an interstitial is eligible there.
@@ -411,10 +411,10 @@ export function RemoteApp() {
             <span
               className={cn(
                 "block text-[10px] font-semibold uppercase tracking-wider",
-                connected ? "text-primary" : "text-muted-foreground",
+                connected ? "text-primary" : reconnecting ? "text-amber-400 animate-pulse" : "text-muted-foreground",
               )}
             >
-              {connected ? t("connected") : t("notConnected")}
+              {connected ? t("connected") : reconnecting ? "Connecting…" : t("notConnected")}
             </span>
           </span>
         </span>
