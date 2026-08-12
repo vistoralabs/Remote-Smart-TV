@@ -18,12 +18,14 @@ export function SettingsSheet({
   appName,
   version,
   t,
+  onRateApp,
 }: {
   settings: Settings;
   onChange: (next: Partial<Settings>) => void;
   appName: string;
   version: string;
   t: (key: StringKey) => string;
+  onRateApp?: () => void;
 }) {
   return (
     <Sheet>
@@ -49,6 +51,7 @@ export function SettingsSheet({
             appName={appName}
             version={version}
             t={t}
+            {...(onRateApp ? { onRateApp } : {})}
           />
         </div>
       </SheetContent>

@@ -27,12 +27,14 @@ export function SettingsPanel({
   appName,
   version,
   t,
+  onRateApp,
 }: {
   settings: Settings;
   onChange: (next: Partial<Settings>) => void;
   appName: string;
   version: string;
   t: (key: StringKey) => string;
+  onRateApp?: () => void;
 }) {
   return (
     <section className="flex flex-col gap-6 text-foreground">
@@ -215,12 +217,16 @@ export function SettingsPanel({
 
       <button
         type="button"
-        onClick={() =>
-          void openStoreListing().then((opened) => {
-            if (!opened) toast.error(t("playStoreError"));
-          })
-        }
-        className="glass-panel flex w-full items-center justify-between rounded-2xl border border-border/60 px-4 py-3.5 text-sm font-semibold text-foreground"
+        onClick={() => {
+          if (onRateApp) {
+            onRateApp();
+          } else {
+            void openStoreListing().then((opened) => {
+              if (!opened) toast.error(t("playStoreError"));
+            });
+          }
+        }}
+        className="glass-panel flex w-full items-center justify-between rounded-2xl border border-border/60 px-4 py-3.5 text-sm font-semibold text-foreground transition-transform active:scale-[0.98]"
       >
         <span className="flex items-center gap-2">
           <Star className="size-4 text-primary" />

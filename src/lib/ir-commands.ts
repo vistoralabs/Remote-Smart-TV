@@ -5,7 +5,7 @@
  * type, then render only the commands the selected code set actually supports.
  */
 import type { ApplianceKind, CodeSet, IrKey } from "./ir-catalog";
-import { IR_KEY_LABEL } from "./ir-catalog";
+import { IR_KEY_LABEL, keysFor } from "./ir-catalog";
 
 /** Stable command identifiers used across the app. */
 export const IRCommand = {
@@ -145,9 +145,18 @@ export function commandLabel(key: IrKey): string {
   return IR_KEY_LABEL[key];
 }
 
-/** The key used for a power test on this code set, or null when unsupported. */
+/** The key used for a power test on this code set. Falls back to any available functional key if power is omitted. */
 export function powerKey(set: CodeSet): IrKey | null {
   if (set.codes.power !== undefined) return "power";
   if (set.codes.poweroff !== undefined) return "poweroff";
-  return null;
+  if (set.codes.mode !== undefined) return "mode";
+  if (set.codes.tempup !== undefined) return "tempup";
+  if (set.codes.speed !== undefined) return "speed";
+  if (set.codes.volup !== undefined) return "volup";
+  if (set.codes.mute !== undefined) return "mute";
+  if (set.codes.ok !== undefined) return "ok";
+  if (set.codes.input !== undefined) return "input";
+  if (set.codes.up !== undefined) return "up";
+  const available = keysFor(set);
+  return available.length > 0 ? available[0]! : null;
 }

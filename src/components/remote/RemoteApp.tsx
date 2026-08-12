@@ -254,6 +254,7 @@ export function RemoteApp() {
             appName={APP_NAME}
             version={APP_VERSION}
             t={t}
+            onRateApp={() => setShowRating(true)}
           />
           <Button
             size="icon"
