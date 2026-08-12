@@ -6,9 +6,9 @@
     "nodejs_compat"
   ],
   "kv_namespaces": [
-    {
-      "binding": "REMOTE_CONFIG_KV",
-      "id": "remote_config_kv_prod"
-    }
-  ]
+  {
+    "binding": "REMOTE_CONFIG_KV",
+    "id": "76bda6c717b34556bbaaffa14094f103"
+  }
+]
 }
