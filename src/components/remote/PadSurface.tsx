@@ -30,12 +30,24 @@ function Arrows({
   return (
     <>
       <span />
-      <RemoteKey ariaLabel="Up" onPress={() => onKey("up")} round={round} disabled={disabled}>
-        <ChevronUp className="size-6" />
+      <RemoteKey
+        ariaLabel="Up"
+        onPress={() => onKey("up")}
+        round={round}
+        disabled={disabled}
+        className="size-full max-h-14 max-w-14 place-self-center"
+      >
+        <ChevronUp className="size-6 shrink-0" />
       </RemoteKey>
       <span />
-      <RemoteKey ariaLabel="Left" onPress={() => onKey("left")} round={round} disabled={disabled}>
-        <ChevronLeft className="size-6" />
+      <RemoteKey
+        ariaLabel="Left"
+        onPress={() => onKey("left")}
+        round={round}
+        disabled={disabled}
+        className="size-full max-h-14 max-w-14 place-self-center"
+      >
+        <ChevronLeft className="size-6 shrink-0" />
       </RemoteKey>
       <RemoteKey
         ariaLabel="OK"
@@ -43,16 +55,28 @@ function Arrows({
         round={round}
         disabled={disabled}
         tone="primary"
-        className="font-display text-sm font-semibold tracking-widest"
+        className="size-full max-h-14 max-w-14 place-self-center font-display text-sm font-semibold tracking-widest"
       >
         OK
       </RemoteKey>
-      <RemoteKey ariaLabel="Right" onPress={() => onKey("right")} round={round} disabled={disabled}>
-        <ChevronRight className="size-6" />
+      <RemoteKey
+        ariaLabel="Right"
+        onPress={() => onKey("right")}
+        round={round}
+        disabled={disabled}
+        className="size-full max-h-14 max-w-14 place-self-center"
+      >
+        <ChevronRight className="size-6 shrink-0" />
       </RemoteKey>
       <span />
-      <RemoteKey ariaLabel="Down" onPress={() => onKey("down")} round={round} disabled={disabled}>
-        <ChevronDown className="size-6" />
+      <RemoteKey
+        ariaLabel="Down"
+        onPress={() => onKey("down")}
+        round={round}
+        disabled={disabled}
+        className="size-full max-h-14 max-w-14 place-self-center"
+      >
+        <ChevronDown className="size-6 shrink-0" />
       </RemoteKey>
       <span />
     </>
@@ -63,7 +87,7 @@ function RingPad({ onKey, disabled }: { onKey: (key: Key) => void; disabled: boo
   return (
     <div className="relative mx-auto aspect-square w-full max-w-[15rem]">
       <div className="absolute inset-0 rounded-full border border-border/70 shell-panel" />
-      <div className="absolute inset-3 grid grid-cols-3 grid-rows-3 gap-2">
+      <div className="absolute inset-2 grid h-[calc(100%-1rem)] w-[calc(100%-1rem)] grid-cols-3 grid-rows-3 place-items-center gap-1">
         <Arrows onKey={onKey} round disabled={disabled} />
       </div>
     </div>
@@ -73,7 +97,7 @@ function RingPad({ onKey, disabled }: { onKey: (key: Key) => void; disabled: boo
 function CrossPad({ onKey, disabled }: { onKey: (key: Key) => void; disabled: boolean }) {
   return (
     <div className="mx-auto aspect-square w-full max-w-[15rem] rounded-3xl border border-border/70 shell-panel p-3">
-      <div className="grid h-full grid-cols-3 grid-rows-3 gap-1.5">
+      <div className="grid h-full grid-cols-3 grid-rows-3 place-items-center gap-1.5">
         <Arrows onKey={onKey} round={false} disabled={disabled} />
       </div>
     </div>
@@ -81,11 +105,9 @@ function CrossPad({ onKey, disabled }: { onKey: (key: Key) => void; disabled: bo
 }
 
 function CompactPad({ onKey, disabled }: { onKey: (key: Key) => void; disabled: boolean }) {
-  // Compact means a tighter frame, not smaller keys: every key still fills its
-  // cell so the touch targets stay well above the 48dp minimum.
   return (
     <div className="mx-auto aspect-square w-full max-w-[15rem] p-1">
-      <div className="grid h-full grid-cols-3 grid-rows-3 gap-2 [&>button]:size-full">
+      <div className="grid h-full grid-cols-3 grid-rows-3 place-items-center gap-2 [&>button]:size-full">
         <Arrows onKey={onKey} round={false} disabled={disabled} />
       </div>
     </div>
