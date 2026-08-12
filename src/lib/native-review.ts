@@ -183,6 +183,43 @@ export function reviewSnapshot(): ReviewSnapshot {
 }
 
 /**
+ * Check all eligibility criteria and return true if the custom rating popup
+ * should be shown. Unlike maybeRequestReview this does not require a native
+ * runtime — it is intended for the in-app star dialog.
+ */
+export function shouldShowRating(): boolean {
+  if (state.requesting) return false;
+  const sessions = readNumber(SESSIONS_KEY);
+  const completed = readNumber(COMPLETED_KEY) === 1;
+  const adQuiet = Date.now() - state.lastAdAt > AD_QUIET_MS;
+  const checks: [string, boolean][] = [
+    ["already completed", !completed],
+    ["cooldown", cooldownOver()],
+    [`sessions >= ${MIN_SESSIONS}`, sessions >= MIN_SESSIONS],
+    ["tv connected", state.connected],
+    [`commands >= ${MIN_COMMANDS}`, state.commands >= MIN_COMMANDS],
+    ["remote session active", remoteActive()],
+    ["app in foreground", foreground()],
+    ["no recent ad", adQuiet],
+  ];
+  const failed = checks.find(([, ok]) => !ok);
+  if (failed) {
+    log(`shouldShowRating: blocked by ${failed[0]}`);
+    return false;
+  }
+  log("shouldShowRating: eligible");
+  return true;
+}
+
+/**
+ * Record that the rating dialog was shown so the 90-day cooldown kicks in.
+ */
+export function markRatingShown(): void {
+  write(REQUESTED_KEY, String(Date.now()));
+  log("markRatingShown: cooldown started");
+}
+
+/**
  * Ask Play for the review sheet when every rule passes. Safe to call often —
  * it is a no-op (with a logged reason) whenever the app is not eligible.
  */

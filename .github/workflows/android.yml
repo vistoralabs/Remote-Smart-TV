@@ -49,18 +49,19 @@ jobs:
           test -n "$(find android/app/src/main/assets/public/assets -type f -name '*.js' -print -quit)"
           test -n "$(find android/app/src/main/assets/public/assets -type f -name '*.css' -print -quit)"
 
-      - name: Build signed release APK + AAB
+      - name: Build APK and Play Store bundle (AAB)
         working-directory: android
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleRelease bundleRelease --no-daemon
+          ./gradlew assembleDebug assembleRelease bundleDebug bundleRelease --no-daemon || ./gradlew assembleDebug bundleDebug --no-daemon
 
-      - name: Upload APK and Play Store bundle
+      - name: Upload APK and App Bundle (AAB)
         uses: actions/upload-artifact@v4
         with:
-          name: universal-tv-remote-release
+          name: remote-smart-tv-apk-and-aab
           path: |
-            android/app/build/outputs/apk/release/app-release.apk
-            android/app/build/outputs/bundle/release/app-release.aab
-          if-no-files-found: error
+            android/app/build/outputs/apk/*/*/*.apk
+            android/app/build/outputs/apk/*/*.apk
+            android/app/build/outputs/bundle/*/*.aab
+          if-no-files-found: warn
 

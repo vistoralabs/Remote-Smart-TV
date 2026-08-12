@@ -1,13 +1,20 @@
-import { useCallback, useEffect, useState } from "react";
-import { androidTvState, hasNativeAndroidTv } from "@/lib/native-android-tv";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { androidTvState, hasNativeAndroidTv, reconnectAndroidTv } from "@/lib/native-android-tv";
 import type { Device } from "@/lib/remote-types";
 
 export interface ConnectionState {
   /** True only when the 6466 remote session is authenticated and ready. */
   connected: boolean;
+  /** True while an automatic reconnection attempt is in progress. */
+  reconnecting: boolean;
   host: string | null;
   refresh: () => void;
 }
+
+/** Backoff config */
+const INITIAL_BACKOFF_MS = 2000;
+const MAX_BACKOFF_MS = 15000;
+const MAX_RETRY_ATTEMPTS = 10;
 
 /**
  * Live remote-session state. For Android TV / Xstream boxes this reflects the
@@ -19,31 +26,93 @@ export function useConnection(device: Device | null): ConnectionState {
     device && device.transport === "wifi" && device.brand === "androidtv" && hasNativeAndroidTv(),
   );
   const [connected, setConnected] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
   const [host, setHost] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
+
+  // Track previous connected value to detect drops
+  const wasConnectedRef = useRef(false);
+  // Track active reconnection to avoid overlapping attempts
+  const reconnectingRef = useRef(false);
 
   const refresh = useCallback(() => setTick((value) => value + 1), []);
 
   useEffect(() => {
     if (!device) {
       setConnected(false);
+      setReconnecting(false);
       setHost(null);
+      wasConnectedRef.current = false;
+      reconnectingRef.current = false;
       return;
     }
     if (!managed) {
       setConnected(true);
+      setReconnecting(false);
       setHost(device.address);
+      wasConnectedRef.current = false;
+      reconnectingRef.current = false;
       return;
     }
+
     let alive = true;
+
+    const attemptReconnect = async (address: string) => {
+      if (reconnectingRef.current) return;
+      reconnectingRef.current = true;
+      setReconnecting(true);
+
+      let backoff = INITIAL_BACKOFF_MS;
+
+      for (let attempt = 0; attempt < MAX_RETRY_ATTEMPTS; attempt++) {
+        if (!alive) break;
+
+        await new Promise((resolve) => setTimeout(resolve, backoff));
+        if (!alive) break;
+
+        const success = await reconnectAndroidTv(address);
+        if (!alive) break;
+
+        if (success) {
+          setConnected(true);
+          setReconnecting(false);
+          wasConnectedRef.current = true;
+          reconnectingRef.current = false;
+          return;
+        }
+
+        backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);
+      }
+
+      // Exhausted all retries — give up
+      if (alive) {
+        setReconnecting(false);
+      }
+      reconnectingRef.current = false;
+    };
+
     const poll = async () => {
       try {
         const state = await androidTvState();
         if (!alive) return;
-        setConnected(Boolean(state.connected));
+        const isConnected = Boolean(state.connected);
+        setConnected(isConnected);
         setHost(state.address ?? device.address);
+
+        // Detect connection drop and trigger reconnection
+        if (wasConnectedRef.current && !isConnected) {
+          void attemptReconnect(state.address ?? device.address);
+        }
+
+        wasConnectedRef.current = isConnected;
       } catch {
-        if (alive) setConnected(false);
+        if (alive) {
+          setConnected(false);
+          if (wasConnectedRef.current) {
+            void attemptReconnect(device.address);
+          }
+          wasConnectedRef.current = false;
+        }
       }
     };
     void poll();
@@ -54,5 +123,5 @@ export function useConnection(device: Device | null): ConnectionState {
     };
   }, [device, managed, tick]);
 
-  return { connected, host, refresh };
+  return { connected, reconnecting, host, refresh };
 }

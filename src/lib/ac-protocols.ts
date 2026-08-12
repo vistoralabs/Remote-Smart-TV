@@ -139,12 +139,119 @@ const DAIKIN_ARC: AcProfile = {
   },
 };
 
-const PROFILES: AcProfile[] = [DAIKIN_ARC];
+/* ------------------------------------------------------------------ */
+/* LG AC (28-bit frame protocol)                                      */
+/* ------------------------------------------------------------------ */
+function buildLgAc(state: AcState): number[] {
+  const pattern: number[] = [3200, 3200];
+  const temp = Math.min(30, Math.max(18, Math.round(state.temperature)));
+  const modeVal = state.mode === "cool" ? 0 : state.mode === "dry" ? 1 : state.mode === "fan" ? 2 : state.mode === "heat" ? 4 : 0;
+  const fanVal = state.fan === "auto" ? 5 : state.fan === "1" ? 0 : state.fan === "2" ? 2 : 4;
+  const pwrVal = state.power ? 0 : 1;
+
+  // 28-bit payload: [0x88] [pwr/mode] [temp-15] [fan]
+  const b1 = 0x88;
+  const b2 = (pwrVal << 3) | (modeVal & 0x07);
+  const b3 = ((temp - 15) & 0x0f) << 4 | (fanVal & 0x0f);
+  const crc = (b1 + b2 + b3) & 0x0f;
+
+  const payload = (b1 << 20) | (b2 << 16) | (b3 << 8) | crc;
+
+  for (let i = 27; i >= 0; i--) {
+    const bit = (payload >>> i) & 1;
+    pattern.push(500, bit ? 1600 : 550);
+  }
+  pattern.push(500, 10000);
+  return pattern;
+}
+
+const LG_AC: AcProfile = {
+  id: "lg-ac",
+  label: "LG AC",
+  protocol: "lg-ac (28 bit frame)",
+  frequency: 38000,
+  capabilities: {
+    minTemp: 18,
+    maxTemp: 30,
+    modes: ["auto", "cool", "dry", "fan", "heat"],
+    fans: ["auto", "1", "2", "3", "4"],
+    swing: true,
+    turbo: true,
+    eco: false,
+  },
+  build: buildLgAc,
+  defaults: {
+    power: true,
+    temperature: 24,
+    mode: "cool",
+    fan: "auto",
+    swing: false,
+    turbo: false,
+    eco: false,
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/* Samsung AC (14-byte frame protocol)                                */
+/* ------------------------------------------------------------------ */
+function buildSamsungAc(state: AcState): number[] {
+  const pattern: number[] = [3000, 8900];
+  const temp = Math.min(30, Math.max(16, Math.round(state.temperature)));
+  const modeVal = state.mode === "cool" ? 1 : state.mode === "dry" ? 2 : state.mode === "fan" ? 3 : state.mode === "heat" ? 4 : 0;
+  const fanVal = state.fan === "auto" ? 0 : state.fan === "1" ? 2 : state.fan === "2" ? 4 : 5;
+
+  const bytes = [
+    0x02, 0x92, 0x0f, 0x00, 0x00, 0x00, 0x00,
+    0x01, 0x02, (modeVal << 4) | (state.power ? 0x01 : 0x00),
+    ((temp - 16) & 0x0f) << 4 | (fanVal & 0x0f),
+    0x00, 0x00, 0x00
+  ];
+
+  for (const b of bytes) {
+    for (let i = 0; i < 8; i++) {
+      const bit = (b >>> i) & 1;
+      pattern.push(560, bit ? 1600 : 560);
+    }
+  }
+  pattern.push(560, 15000);
+  return pattern;
+}
+
+const SAMSUNG_AC: AcProfile = {
+  id: "samsung-ac",
+  label: "Samsung AC",
+  protocol: "samsung-ac (14 byte frame)",
+  frequency: 38000,
+  capabilities: {
+    minTemp: 16,
+    maxTemp: 30,
+    modes: ["auto", "cool", "dry", "fan", "heat"],
+    fans: ["auto", "1", "2", "3"],
+    swing: true,
+    turbo: true,
+    eco: true,
+  },
+  build: buildSamsungAc,
+  defaults: {
+    power: true,
+    temperature: 24,
+    mode: "cool",
+    fan: "auto",
+    swing: false,
+    turbo: false,
+    eco: false,
+  },
+};
+
+const PROFILES: AcProfile[] = [DAIKIN_ARC, LG_AC, SAMSUNG_AC];
 
 /** Stateful AC profile for a brand, or null when only discrete codes exist. */
 export function acProfileFor(brand: string): AcProfile | null {
-  const name = brand.toLowerCase();
-  return PROFILES.find((profile) => name.includes(profile.id.split("-")[0] ?? "")) ?? null;
+  const name = brand.toLowerCase().trim();
+  if (name.includes("daikin")) return DAIKIN_ARC;
+  if (name.includes("lg")) return LG_AC;
+  if (name.includes("samsung")) return SAMSUNG_AC;
+  return PROFILES.find((p) => name.includes(p.id.split("-")[0] ?? "")) ?? null;
 }
 
 export const AC_MODE_LABEL: Record<AcMode, string> = {

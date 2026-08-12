@@ -87,3 +87,16 @@ export async function clearAndroidTvDiagnostics(): Promise<void> {
 export async function disconnectAndroidTv(): Promise<void> {
   await NativeAndroidTv.disconnect();
 }
+
+/**
+ * Attempt to reconnect to a previously-paired Android TV device.
+ * Returns `true` if the reconnection succeeds, `false` otherwise.
+ */
+export async function reconnectAndroidTv(address: string): Promise<boolean> {
+  try {
+    const result = await NativeAndroidTv.connect({ address });
+    return Boolean(result.connected);
+  } catch {
+    return false;
+  }
+}

@@ -1,29 +1,32 @@
-# Building the APK (no Android Studio required)
+# Building the APK & App Bundle (AAB)
 
-The web app you see in the preview runs in a browser, where Android blocks the
-IR emitter and Bluetooth HID keys. The installable Android app removes those
-limits. Everything needed is already in this repo.
+The web app preview runs in a browser where Android limits hardware access to the IR blaster and Bluetooth HID keys. The native Android build (`.apk` and `.aab`) unlocks full hardware control.
 
-## Option A — GitHub cloud build (recommended)
+## Option A — GitHub Cloud Build (Recommended & Automated)
 
-1. Connect this project to GitHub (Lovable → GitHub → Connect).
-2. Open your repo → **Actions** tab → **Build Android APK** → **Run workflow**.
-3. Wait ~5 minutes. Open the finished run and download the
-   **universal-tv-remote-apk** artifact.
-4. Unzip it, copy `app-debug.apk` to your phone, and install it
-   (allow "Install unknown apps" for your file manager or browser).
+1. Push your changes to GitHub (or open your connected GitHub repo).
+2. Go to **Actions** tab → **Build Android APK** → click **Run workflow**.
+3. After ~3–5 minutes, open the completed run and download **`remote-smart-tv-apk-and-aab`**.
+4. The downloaded ZIP archive contains:
+   - **`app-debug.apk` / `app-release.apk`** — Install directly on your Android phone to test.
+   - **`app-release.aab`** — Google Play Store App Bundle for store publishing.
 
-The workflow also runs automatically on every push to `main`.
+## Option B — Build Locally
 
-## Option B — build locally
-
-Requires JDK 21 and the Android SDK on your machine:
+Requires JDK 21 and the Android SDK:
 
 ```bash
-bun install
-bun run sync:android
-cd android && ./gradlew assembleDebug
+# 1. Build WebView bundle & sync to Android project
+npm run build:mobile
+npx cap sync android
+
+# 2. Compile APK and AAB
+cd android
+./gradlew assembleDebug bundleDebug assembleRelease bundleRelease
+
+# Outputs:
 # APK: android/app/build/outputs/apk/debug/app-debug.apk
+# AAB: android/app/build/outputs/bundle/release/app-release.aab
 ```
 
 ## What the native app unlocks

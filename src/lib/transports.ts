@@ -7,7 +7,7 @@ import {
   sendNativeBluetoothKey,
   type NativeBluetoothDevice,
 } from "./native-bluetooth";
-import { hasNativeAndroidTv, sendAndroidTvKey, sendAndroidTvText } from "./native-android-tv";
+import { hasNativeAndroidTv, reconnectAndroidTv, sendAndroidTvKey, sendAndroidTvText } from "./native-android-tv";
 
 /** Minimal Web Bluetooth surface we rely on (not in the default TS DOM lib). */
 interface BleGatt {
@@ -128,6 +128,17 @@ export async function sendKey(device: Device | null, key: Key): Promise<SendResu
         await sendAndroidTvKey(device.address, key);
         return { ok: true, message: "Android TV key sent" };
       } catch (error) {
+        // Retry once: wait 500ms, attempt reconnection, then resend
+        try {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          const reconnected = await reconnectAndroidTv(device.address);
+          if (reconnected) {
+            await sendAndroidTvKey(device.address, key);
+            return { ok: true, message: "Android TV key sent (after reconnect)" };
+          }
+        } catch {
+          // Retry also failed — fall through to return original error
+        }
         return {
           ok: false,
           message: error instanceof Error ? error.message : "Android TV did not answer",

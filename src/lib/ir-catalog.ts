@@ -171,29 +171,45 @@ function buildAppliances(): Appliance[] {
   const raw = irData as unknown as Record<string, { n: string; r: RawSet[] }[]>;
   const out: Appliance[] = [];
   for (const kind of KIND_ORDER) {
-    const brands = raw[kind];
-    if (!brands?.length) continue;
-    out.push({
-      kind,
-      label: KIND_LABEL[kind],
-      brands: brands.map((brand) => ({
-        name: brand.n,
-        sets: brand.r.map((set, index) => {
-          const codes: Partial<Record<IrKey, IrSignal>> = {};
-          for (const [key, value] of Object.entries(set.k)) {
-            if (KEY_SET.has(key)) codes[key as IrKey] = value;
+    const rawBrands = raw[kind];
+    if (!rawBrands?.length) continue;
+    const validBrands: IrBrand[] = [];
+
+    for (const brand of rawBrands) {
+      const validSets: CodeSet[] = [];
+      for (const set of brand.r || []) {
+        const codes: Partial<Record<IrKey, IrSignal>> = {};
+        for (const [key, value] of Object.entries(set.k || {})) {
+          if (KEY_SET.has(key) && value !== undefined && value !== null) {
+            codes[key as IrKey] = value;
           }
-          return {
-            label: `Remote ${index + 1}`,
+        }
+        if (Object.keys(codes).length > 0) {
+          validSets.push({
+            label: `Remote ${validSets.length + 1}`,
             ...(set.m ? { model: set.m } : {}),
             protocol: set.p as IrProtocol,
             device: set.d,
             subdevice: set.s,
             codes,
-          };
-        }),
-      })),
-    });
+          });
+        }
+      }
+      if (validSets.length > 0) {
+        validBrands.push({
+          name: brand.n,
+          sets: validSets,
+        });
+      }
+    }
+
+    if (validBrands.length > 0) {
+      out.push({
+        kind,
+        label: KIND_LABEL[kind],
+        brands: validBrands,
+      });
+    }
   }
   return out;
 }

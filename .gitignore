@@ -56,3 +56,6 @@ android/keystore/
 node_modules/
 dist/
 build/
+*.apk
+*.bak
+

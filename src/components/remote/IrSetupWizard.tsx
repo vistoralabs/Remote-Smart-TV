@@ -289,10 +289,15 @@ export function IrSetupWizard({
       {step === "code" && brand && codeSet ? (
         <div className="flex flex-col gap-3">
           <div className="glass-panel rounded-2xl border border-border/60 px-4 py-3">
-            <p className="text-sm font-semibold">
-              {brand.name} · {codeSet.label}
-            </p>
-            <p className="text-[11px] text-muted-foreground">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold">
+                {brand.name} · {codeSet.label}
+              </p>
+              <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-semibold text-primary">
+                Remote {setIndex + 1} of {brand.sets.length}
+              </span>
+            </div>
+            <p className="mt-1 text-[11px] text-muted-foreground">
               {auto.running
                 ? `${t("irTesting")} ${auto.index + 1}/${auto.total}`
                 : `${keysFor(codeSet).length} ${t("irButtons")} · ${codeSet.protocol}`}
@@ -309,8 +314,8 @@ export function IrSetupWizard({
                     setTested(false);
                   }}
                   className={cn(
-                    "glass-panel min-h-10 rounded-full border px-3 py-1.5 text-xs font-medium",
-                    setIndex === index ? "border-primary/60 text-primary" : "border-border/60",
+                    "glass-panel min-h-10 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                    setIndex === index ? "border-primary/60 text-primary bg-primary/10" : "border-border/60",
                   )}
                 >
                   {item.label}
@@ -318,22 +323,37 @@ export function IrSetupWizard({
               ))}
             </div>
           ) : null}
-          <Button className="h-14 rounded-xl text-base" onClick={() => void testPower()}>
+          <Button className="h-14 rounded-xl text-base font-semibold shadow-md" onClick={() => void testPower()}>
             <Radio className="mr-2 size-5" /> {t("testPower")}
           </Button>
+
+          {/* IR Range & Line of Sight Guidance */}
+          <div className="glass-panel rounded-xl border border-border/50 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+            <p className="font-medium text-foreground">💡 IR Remote Tip</p>
+            <p>Recommended distance: ~1–5 meters under normal conditions. Point the top edge of your phone directly at the appliance with a clear line of sight.</p>
+          </div>
+
           {tested ? (
             <>
-              <p className="text-center text-xs text-muted-foreground">{t("irDidItWork")}</p>
+              <p className="text-center text-xs font-medium text-muted-foreground">{t("irDidItWork")}</p>
               <div className="grid grid-cols-2 gap-2">
-                <Button className="h-12 rounded-xl" onClick={confirm}>
+                <Button className="h-12 rounded-xl text-sm font-semibold" onClick={confirm}>
                   <Check className="mr-1.5 size-4" /> {t("irYesWorks")}
                 </Button>
-                <Button variant="secondary" className="h-12 rounded-xl" onClick={nextCandidate}>
+                <Button variant="secondary" className="h-12 rounded-xl text-sm font-medium" onClick={nextCandidate}>
                   <X className="mr-1.5 size-4" /> {t("irTryAnother")}
                 </Button>
               </div>
             </>
           ) : null}
+        </div>
+      ) : step === "code" ? (
+        <div className="glass-panel rounded-2xl border border-border/60 p-6 text-center text-xs text-muted-foreground">
+          <p className="font-semibold text-foreground">No usable code sets for this brand</p>
+          <p className="mt-1">Please select another brand or use Auto Search.</p>
+          <Button variant="outline" className="mt-4 rounded-xl" onClick={() => setStep("brand")}>
+            Back to Brands
+          </Button>
         </div>
       ) : null}
 

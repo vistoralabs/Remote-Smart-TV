@@ -26,6 +26,7 @@ import { IrRemoteScreen } from "@/components/remote/IrRemoteScreen";
 import { PadSurface } from "@/components/remote/PadSurface";
 import { RemoteKey } from "@/components/remote/RemoteKey";
 import { Onboarding } from "@/components/remote/Onboarding";
+import { RatingDialog } from "@/components/remote/RatingDialog";
 
 import { VoiceKey } from "@/components/remote/VoiceKey";
 import { DebugSheet } from "@/components/remote/DebugSheet";
@@ -50,6 +51,9 @@ import {
   noteCommand,
   noteConnection,
   noteSessionStart,
+  shouldShowRating,
+  markRatingShown,
+  openStoreListing,
 } from "@/lib/native-review";
 import { keyFeedback } from "@/lib/feedback";
 import {
@@ -83,6 +87,7 @@ export function RemoteApp() {
   const [irRemotes, setIrRemotes] = useState<SavedIrRemote[]>([]);
   const [openIr, setOpenIr] = useState<SavedIrRemote | null>(null);
   const pressCount = useRef(0);
+  const [showRating, setShowRating] = useState(false);
 
   useEffect(() => {
     setCapabilities(probeCapabilities());
@@ -185,6 +190,10 @@ export function RemoteApp() {
         noteCommand();
         // Official Play In-App Review — only fires when every rule passes.
         void maybeRequestReview("remote command");
+        // Custom in-app rating popup fallback
+        if (shouldShowRating()) {
+          setShowRating(true);
+        }
       }
       if (pressCount.current >= 6) {
         pressCount.current = 0;
@@ -499,7 +508,23 @@ export function RemoteApp() {
         </RemoteKey>
         <VoiceKey device={active} connected={connected} label={t("voice")} className="h-full" />
       </div>
-      
+
+      <RatingDialog
+        open={showRating}
+        onClose={() => {
+          setShowRating(false);
+          markRatingShown();
+        }}
+        onRate={(stars) => {
+          if (stars >= 4) {
+            void openStoreListing();
+          } else {
+            window.open("mailto:shivkr6083@gmail.com?subject=Smart TV Remote Feedback");
+          }
+          markRatingShown();
+        }}
+        t={t}
+      />
     </main>
   );
 }
