@@ -1,9 +1,20 @@
 /**
  * Centralized RemoteConfigManager.
  *
- * Fetches configuration from Cloudflare Worker (/api/config) with safe local
- * defaults and localStorage caching so the app NEVER crashes if Cloudflare is offline.
+ * Fetches configuration from Cloudflare Worker (https://remote-smart-tv.vistora.workers.dev/api/config)
+ * with safe local defaults and localStorage caching so the app NEVER crashes if Cloudflare is offline.
  */
+
+import { Capacitor } from "@capacitor/core";
+
+export const WORKER_PRODUCTION_URL = "https://remote-smart-tv.vistora.workers.dev";
+
+export function getRemoteConfigEndpoint(): string {
+  if (Capacitor.isNativePlatform() || (typeof window !== "undefined" && window.location.hostname === "localhost")) {
+    return `${WORKER_PRODUCTION_URL}/api/config`;
+  }
+  return "/api/config";
+}
 
 export interface AppAnnouncementConfig {
   enabled: boolean;
@@ -123,7 +134,8 @@ export async function fetchRemoteConfig(): Promise<RemoteConfig> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 4000);
-    const response = await fetch("/api/config", { signal: controller.signal });
+    const endpoint = getRemoteConfigEndpoint();
+    const response = await fetch(endpoint, { signal: controller.signal });
     clearTimeout(timeoutId);
     if (!response.ok) return cached;
     const raw = (await response.json()) as Record<string, unknown>;
