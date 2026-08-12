@@ -126,7 +126,9 @@ export async function fetchRemoteConfig(): Promise<RemoteConfig> {
     const response = await fetch("/api/config", { signal: controller.signal });
     clearTimeout(timeoutId);
     if (!response.ok) return cached;
-    const data = (await response.json()) as Partial<RemoteConfig>;
+    const raw = (await response.json()) as Record<string, unknown>;
+    const rawConfig = raw["config"];
+    const data = (rawConfig && typeof rawConfig === "object" ? rawConfig : raw) as Partial<RemoteConfig>;
     const merged: RemoteConfig = {
       appAnnouncement: { ...cached.appAnnouncement, ...data.appAnnouncement },
       rating: { ...cached.rating, ...data.rating },
