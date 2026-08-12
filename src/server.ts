@@ -62,6 +62,7 @@ interface RemoteConfigDiagnostics {
   keyExists: boolean;
   jsonParseOk: boolean;
   worker: string;
+  envKeys: string[];
 }
 
 const KV_CONFIG_KEY = "remote-config:v1";
@@ -79,15 +80,22 @@ let inMemoryDynamicConfig: RemoteConfig = {
   },
 };
 
+function resolveEnv(env: unknown): EnvBindings | undefined {
+  if (env && typeof env === "object") return env as EnvBindings;
+  const globalEnv = (globalThis as unknown as { __env__?: unknown }).__env__;
+  if (globalEnv && typeof globalEnv === "object") return globalEnv as EnvBindings;
+  return undefined;
+}
+
 function getKvBinding(env: unknown): KVNamespace | null {
-  if (!env || typeof env !== "object") return null;
-  const e = env as EnvBindings;
+  const e = resolveEnv(env);
+  if (!e || typeof e !== "object") return null;
   return e.REMOTE_CONFIG_KV ?? e.CONFIG_KV ?? e.REMOTE_CONFIG ?? null;
 }
 
 function getAdminSecret(env: unknown): string {
-  if (env && typeof env === "object") {
-    const e = env as EnvBindings;
+  const e = resolveEnv(env);
+  if (e && typeof e === "object") {
     if (e.ADMIN_SECRET && e.ADMIN_SECRET.trim()) return e.ADMIN_SECRET.trim();
   }
   return "vistora-secret-key-2026";
@@ -201,6 +209,8 @@ async function saveRemoteConfigToKv(env: unknown, config: RemoteConfig): Promise
 }
 
 async function loadRemoteConfigDiagnostics(env: unknown): Promise<RemoteConfigDiagnostics> {
+  const resolved = resolveEnv(env);
+  const envKeys = resolved ? Object.keys(resolved) : [];
   const kv = getKvBinding(env);
   let keyExists = false;
   let jsonParseOk = false;
@@ -213,7 +223,8 @@ async function loadRemoteConfigDiagnostics(env: unknown): Promise<RemoteConfigDi
       key: KV_CONFIG_KEY,
       keyExists: false,
       jsonParseOk: false,
-      worker: "shivkr6083-eng-remote-smart-tv",
+      worker: "remote-smart-tv",
+      envKeys,
     };
   }
 
@@ -243,7 +254,8 @@ async function loadRemoteConfigDiagnostics(env: unknown): Promise<RemoteConfigDi
     key: KV_CONFIG_KEY,
     keyExists,
     jsonParseOk,
-    worker: "shivkr6083-eng-remote-smart-tv",
+    worker: "remote-smart-tv",
+    envKeys,
   };
 }
 
