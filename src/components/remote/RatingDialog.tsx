@@ -31,18 +31,39 @@ export function RatingDialog({ open, onClose, onRate, t }: RatingDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="mx-auto w-[92vw] max-w-sm rounded-3xl border border-border/60 bg-popover/95 p-0 backdrop-blur-xl shadow-2xl">
-        <div className="flex flex-col items-center gap-5 px-6 pb-6 pt-7 text-popover-foreground">
+      <DialogContent
+        className="mx-auto w-[92vw] max-w-sm rounded-3xl p-0 shadow-2xl transition-all border"
+        style={{
+          backgroundColor: "var(--card, #1a1d23)",
+          borderColor: "color-mix(in srgb, var(--border, #2c3038) 80%, transparent)",
+          color: "var(--card-foreground, #f4f5f7)",
+          boxShadow: "0 20px 60px -15px rgba(0, 0, 0, 0.7)",
+        }}
+      >
+        <div className="flex flex-col items-center gap-5 px-6 pb-6 pt-7">
           {/* Theme-aware App Name Badge */}
-          <span className="rounded-full bg-primary/10 px-4 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-primary">
+          <span
+            className="rounded-full px-4 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.2em] border"
+            style={{
+              backgroundColor: "color-mix(in srgb, var(--primary, #f0a93f) 16%, transparent)",
+              color: "var(--primary, #f0a93f)",
+              borderColor: "color-mix(in srgb, var(--primary, #f0a93f) 35%, transparent)",
+            }}
+          >
             Smart TV Remote
           </span>
 
           <DialogHeader className="items-center gap-1.5">
-            <DialogTitle className="text-center font-display text-xl font-bold tracking-tight text-foreground">
+            <DialogTitle
+              className="text-center font-display text-xl font-bold tracking-tight"
+              style={{ color: "var(--foreground, #f4f5f7)" }}
+            >
               ⭐ {t("rateTitle")}
             </DialogTitle>
-            <DialogDescription className="text-center text-xs leading-relaxed text-muted-foreground">
+            <DialogDescription
+              className="text-center text-xs leading-relaxed"
+              style={{ color: "var(--muted-foreground, #a7adb8)" }}
+            >
               {t("rateBody")}
             </DialogDescription>
           </DialogHeader>
@@ -60,20 +81,20 @@ export function RatingDialog({ open, onClose, onRate, t }: RatingDialogProps) {
                   onMouseLeave={() => setHovered(0)}
                   onPointerDown={() => setHovered(star)}
                   onClick={() => handleStarClick(star)}
-                  className="group rounded-full p-1.5 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className="group rounded-full p-1.5 transition-transform duration-200 focus:outline-none"
                   style={{
-                    transform: filled ? "scale(1.15)" : "scale(1)",
-                    transition: "transform 0.2s cubic-bezier(0.34,1.56,0.64,1)",
+                    transform: filled ? "scale(1.18)" : "scale(1)",
                   }}
                 >
                   <Star
-                    className="size-8 transition-colors duration-150"
-                    fill={filled ? "#FACC15" : "transparent"}
-                    stroke={filled ? "#FACC15" : "currentColor"}
-                    strokeWidth={1.5}
+                    className="size-9 transition-colors duration-150"
+                    fill={filled ? "var(--primary, #f0a93f)" : "transparent"}
+                    stroke={filled ? "var(--primary, #f0a93f)" : "var(--muted-foreground, #a7adb8)"}
+                    strokeWidth={filled ? 1 : 1.5}
                     style={{
-                      color: filled ? "#FACC15" : "hsl(var(--muted-foreground) / 0.4)",
-                      filter: filled ? "drop-shadow(0 0 6px rgba(250,204,21,0.4))" : "none",
+                      color: filled ? "var(--primary, #f0a93f)" : "var(--muted-foreground, #a7adb8)",
+                      filter: filled ? "drop-shadow(0 0 8px var(--primary, #f0a93f))" : "none",
+                      opacity: filled ? 1 : 0.45,
                     }}
                   />
                 </button>
@@ -81,8 +102,8 @@ export function RatingDialog({ open, onClose, onRate, t }: RatingDialogProps) {
             })}
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex w-full flex-col gap-2 pt-1">
+          {/* High-Contrast Action Buttons */}
+          <div className="flex w-full flex-col gap-3 pt-2">
             <a
               href={PLAY_STORE_URL}
               target="_blank"
@@ -91,16 +112,26 @@ export function RatingDialog({ open, onClose, onRate, t }: RatingDialogProps) {
                 onRate(activeStarCount);
                 onClose();
               }}
-              className="glass-panel flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 text-center text-sm font-semibold text-primary-foreground shadow-md transition-all hover:opacity-95 active:scale-[0.98]"
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl text-center text-sm font-extrabold shadow-lg transition-all duration-200 hover:opacity-95 active:scale-[0.98]"
+              style={{
+                backgroundColor: "var(--primary, #f0a93f)",
+                color: "var(--primary-foreground, #111111)",
+                boxShadow: "0 6px 20px -4px color-mix(in srgb, var(--primary, #f0a93f) 50%, transparent)",
+              }}
             >
-              <Star className="size-4 fill-current" />
+              <Star className="size-5 fill-current" />
               Rate on Google Play
             </a>
 
             <button
               type="button"
               onClick={onClose}
-              className="h-10 w-full rounded-xl text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground active:scale-[0.98]"
+              className="h-11 w-full rounded-2xl text-xs font-bold transition-all duration-150 active:scale-[0.98]"
+              style={{
+                backgroundColor: "color-mix(in srgb, var(--muted, #1e2128) 60%, transparent)",
+                color: "var(--muted-foreground, #a7adb8)",
+                border: "1px solid color-mix(in srgb, var(--border, #2c3038) 60%, transparent)",
+              }}
             >
               {t("maybeLater")}
             </button>
