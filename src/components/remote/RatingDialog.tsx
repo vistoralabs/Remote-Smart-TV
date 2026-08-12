@@ -35,19 +35,19 @@ export function RatingDialog({ open, onClose, onRate, t }: RatingDialogProps) {
         className="mx-auto w-[92vw] max-w-sm rounded-3xl p-0 shadow-2xl transition-all border"
         style={{
           backgroundColor: "var(--card, #1a1d23)",
-          borderColor: "color-mix(in srgb, var(--border, #2c3038) 80%, transparent)",
-          color: "var(--card-foreground, #f4f5f7)",
-          boxShadow: "0 20px 60px -15px rgba(0, 0, 0, 0.7)",
+          borderColor: "var(--border, #2c3038)",
+          color: "var(--foreground, #f4f5f7)",
+          boxShadow: "0 24px 60px -15px var(--shadow-color, rgba(0, 0, 0, 0.5))",
         }}
       >
         <div className="flex flex-col items-center gap-5 px-6 pb-6 pt-7">
-          {/* Theme-aware App Name Badge */}
+          {/* App Name Badge */}
           <span
             className="rounded-full px-4 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.2em] border"
             style={{
-              backgroundColor: "color-mix(in srgb, var(--primary, #f0a93f) 16%, transparent)",
+              backgroundColor: "color-mix(in srgb, var(--primary, #f0a93f) 15%, transparent)",
               color: "var(--primary, #f0a93f)",
-              borderColor: "color-mix(in srgb, var(--primary, #f0a93f) 35%, transparent)",
+              borderColor: "color-mix(in srgb, var(--primary, #f0a93f) 30%, transparent)",
             }}
           >
             Smart TV Remote
@@ -88,12 +88,12 @@ export function RatingDialog({ open, onClose, onRate, t }: RatingDialogProps) {
                 >
                   <Star
                     className="size-9 transition-colors duration-150"
-                    fill={filled ? "var(--primary, #f0a93f)" : "transparent"}
-                    stroke={filled ? "var(--primary, #f0a93f)" : "var(--muted-foreground, #a7adb8)"}
+                    fill={filled ? "#facc15" : "transparent"}
+                    stroke={filled ? "#eab308" : "var(--muted-foreground, #a7adb8)"}
                     strokeWidth={filled ? 1 : 1.5}
                     style={{
-                      color: filled ? "var(--primary, #f0a93f)" : "var(--muted-foreground, #a7adb8)",
-                      filter: filled ? "drop-shadow(0 0 8px var(--primary, #f0a93f))" : "none",
+                      color: filled ? "#facc15" : "var(--muted-foreground, #a7adb8)",
+                      filter: filled ? "drop-shadow(0 0 8px rgba(250, 204, 21, 0.6))" : "none",
                       opacity: filled ? 1 : 0.45,
                     }}
                   />
