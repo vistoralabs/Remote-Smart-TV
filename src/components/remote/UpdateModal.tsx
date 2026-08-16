@@ -1,4 +1,3 @@
-import { useState, useEffect } from "react";
 import { Download, AlertTriangle } from "lucide-react";
 import {
   Dialog,
@@ -10,11 +9,7 @@ import {
 import { APP_VERSION } from "@/lib/app-info";
 import type { VersionConfig } from "@/lib/remote-config";
 
-interface UpdateModalProps {
-  versionConfig: VersionConfig;
-}
-
-function compareVersions(v1: string, v2: string): number {
+export function compareVersions(v1: string, v2: string): number {
   const parts1 = v1.split(".").map((p) => parseInt(p, 10) || 0);
   const parts2 = v2.split(".").map((p) => parseInt(p, 10) || 0);
   const len = Math.max(parts1.length, parts2.length);
@@ -27,42 +22,48 @@ function compareVersions(v1: string, v2: string): number {
   return 0;
 }
 
-export function UpdateModal({ versionConfig }: UpdateModalProps) {
-  const [open, setOpen] = useState(false);
-  const [mandatory, setMandatory] = useState(false);
-
-  useEffect(() => {
-    if (!versionConfig.minimumSupported) return;
-    const current = APP_VERSION;
-    if (compareVersions(current, versionConfig.minimumSupported) < 0) {
-      setMandatory(true);
-      setOpen(true);
-      return;
-    }
-    if (versionConfig.recommended && compareVersions(current, versionConfig.recommended) < 0) {
-      try {
-        const skipped = window.localStorage.getItem(`update.skipped.${versionConfig.recommended}`);
-        if (!skipped) {
-          setMandatory(false);
-          setOpen(true);
-        }
-      } catch {
-        setOpen(true);
+export function checkUpdateStatus(versionConfig: VersionConfig): { available: boolean; mandatory: boolean } {
+  if (!versionConfig.minimumSupported) return { available: false, mandatory: false };
+  const current = APP_VERSION;
+  if (compareVersions(current, versionConfig.minimumSupported) < 0) {
+    return { available: true, mandatory: true };
+  }
+  if (versionConfig.recommended && compareVersions(current, versionConfig.recommended) < 0) {
+    try {
+      const skipped = window.localStorage.getItem(`update.skipped.${versionConfig.recommended}`);
+      if (!skipped) {
+        return { available: true, mandatory: false };
       }
+    } catch {
+      return { available: true, mandatory: false };
     }
-  }, [versionConfig]);
+  }
+  return { available: false, mandatory: false };
+}
+
+interface UpdateModalProps {
+  open: boolean;
+  versionConfig: VersionConfig;
+  onClose: () => void;
+}
+
+export function UpdateModal({ open, versionConfig, onClose }: UpdateModalProps) {
+  if (!open) return null;
+
+  const updateStatus = checkUpdateStatus(versionConfig);
+  const mandatory = updateStatus.mandatory;
 
   const handleSkip = () => {
     if (mandatory) return;
-    setOpen(false);
     try {
-      window.localStorage.setItem(`update.skipped.${versionConfig.recommended}`, "1");
+      if (versionConfig.recommended) {
+        window.localStorage.setItem(`update.skipped.${versionConfig.recommended}`, "1");
+      }
     } catch {
       /* ignore storage errors */
     }
+    onClose();
   };
-
-  if (!open) return null;
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v && !mandatory) handleSkip(); }}>

@@ -31,8 +31,8 @@ import { RatingDialog } from "@/components/remote/RatingDialog";
 import { VoiceKey } from "@/components/remote/VoiceKey";
 import { DebugSheet } from "@/components/remote/DebugSheet";
 import { SettingsSheet } from "@/components/remote/SettingsSheet";
-import { AnnouncementModal } from "@/components/remote/AnnouncementModal";
-import { UpdateModal } from "@/components/remote/UpdateModal";
+import { AnnouncementModal, shouldShowAnnouncement } from "@/components/remote/AnnouncementModal";
+import { UpdateModal, checkUpdateStatus } from "@/components/remote/UpdateModal";
 import { WebAdBanner } from "@/components/remote/WebAdBanner";
 import logo from "@/assets/logo.png";
 import { TRANSPORT_LABEL, type Device, type Key, type Transport } from "@/lib/remote-types";
@@ -100,7 +100,14 @@ export function RemoteApp() {
   const [irRemotes, setIrRemotes] = useState<SavedIrRemote[]>([]);
   const [openIr, setOpenIr] = useState<SavedIrRemote | null>(null);
   const pressCount = useRef(0);
-  const [showRating, setShowRating] = useState(false);
+  type PopupType = "rating" | "announcement" | "update" | null;
+  const [activePopup, setActivePopup] = useState<PopupType>(null);
+  const queueCheckedRef = useRef<{ rating: boolean; announcement: boolean; update: boolean }>({
+    rating: false,
+    announcement: false,
+    update: false,
+  });
+
   const [remoteConfig, setRemoteConfig] = useState<RemoteConfig>(DEFAULT_REMOTE_CONFIG);
 
   useEffect(() => {
@@ -126,18 +133,59 @@ export function RemoteApp() {
     }
   }, []);
 
-  // AdMob: boot only full-screen formats; the approved v3.0 UI has no banner.
+  // AdMob: boot only full-screen formats
   useEffect(() => {
     noteSessionStart();
     void startAds();
     noteAdShown();
-    const ratingTimer = window.setTimeout(() => {
-      if (shouldShowRating(true)) {
-        setShowRating(true);
-      }
-    }, 10000);
-    return () => window.clearTimeout(ratingTimer);
   }, []);
+
+  // Centralized Popup Queue Controller
+  // Guarantees strictly ONE popup is rendered at a time in priority order:
+  // Step 1: RatingDialog (if eligible) -> Step 2: AnnouncementModal (if enabled) -> Step 3: UpdateModal (if available)
+  useEffect(() => {
+    // Strictly DO NOT process queue during onboarding or before main UI is ready
+    if (!ready || !settings.onboarded) {
+      setActivePopup(null);
+      return;
+    }
+
+    // Invariant: If a popup is already open, do not queue another
+    if (activePopup !== null) return;
+
+    const timer = window.setTimeout(() => {
+      const checked = queueCheckedRef.current;
+
+      // Priority 1: Rating / Review Popup
+      if (!checked.rating) {
+        checked.rating = true;
+        if (shouldShowRating(true) && remoteConfig.rating.enabled && remoteConfig.features.rating) {
+          setActivePopup("rating");
+          return;
+        }
+      }
+
+      // Priority 2: Cloudflare Remote Announcement Popup
+      if (!checked.announcement) {
+        checked.announcement = true;
+        if (shouldShowAnnouncement(remoteConfig.appAnnouncement)) {
+          setActivePopup("announcement");
+          return;
+        }
+      }
+
+      // Priority 3: Version Update Modal
+      if (!checked.update) {
+        checked.update = true;
+        if (checkUpdateStatus(remoteConfig.version).available) {
+          setActivePopup("update");
+          return;
+        }
+      }
+    }, 1200);
+
+    return () => window.clearTimeout(timer);
+  }, [ready, settings.onboarded, remoteConfig, activePopup]);
 
   const t = useMemo(() => translator(settings.lang), [settings.lang]);
 
@@ -216,7 +264,9 @@ export function RemoteApp() {
         void maybeRequestReview("remote command");
         // Custom in-app rating popup fallback
         if (shouldShowRating()) {
-          setShowRating(true);
+          if (activePopup === null) {
+            setActivePopup("rating");
+          }
         }
       }
       if (pressCount.current >= 6) {
@@ -278,7 +328,11 @@ export function RemoteApp() {
             appName={APP_NAME}
             version={APP_VERSION}
             t={t}
-            onRateApp={() => setShowRating(true)}
+            onRateApp={() => {
+              if (activePopup === null) {
+                setActivePopup("rating");
+              }
+            }}
           />
           <Button
             size="icon"
@@ -548,36 +602,48 @@ export function RemoteApp() {
 
       {!hasNativeAds() && remoteConfig.ads.banner ? <WebAdBanner /> : null}
 
-      {settings.onboarded ? (
-        <>
-          <AnnouncementModal announcement={remoteConfig.appAnnouncement} onboarded={settings.onboarded} />
-          <UpdateModal versionConfig={remoteConfig.version} />
-        </>
-      ) : null}
-
-      <RatingDialog
-        open={showRating}
-        onClose={() => {
-          setShowRating(false);
-          markRatingDismissed();
-        }}
-        onRate={(stars) => {
-          setShowRating(false);
-          markRatingCompleted();
-          if (stars >= 4) {
-            if (isNativePlatform()) {
-              void requestReviewNow("custom_dialog").then((launched) => {
-                if (!launched) void openStoreListing();
-              });
+      {/* Centralized Popup Queue Controller — Strictly ONE modal active at a time */}
+      {settings.onboarded && activePopup === "rating" && (
+        <RatingDialog
+          open={true}
+          onClose={() => {
+            markRatingDismissed();
+            setActivePopup(null);
+          }}
+          onRate={(stars) => {
+            markRatingCompleted();
+            setActivePopup(null);
+            if (stars >= 4) {
+              if (isNativePlatform()) {
+                void requestReviewNow("custom_dialog").then((launched) => {
+                  if (!launched) void openStoreListing();
+                });
+              } else {
+                void openStoreListing();
+              }
             } else {
-              void openStoreListing();
+              window.open("mailto:shivkr6083@gmail.com?subject=Smart TV Remote Feedback");
             }
-          } else {
-            window.open("mailto:shivkr6083@gmail.com?subject=Smart TV Remote Feedback");
-          }
-        }}
-        t={t}
-      />
+          }}
+          t={t}
+        />
+      )}
+
+      {settings.onboarded && activePopup === "announcement" && (
+        <AnnouncementModal
+          open={true}
+          announcement={remoteConfig.appAnnouncement}
+          onClose={() => setActivePopup(null)}
+        />
+      )}
+
+      {settings.onboarded && activePopup === "update" && (
+        <UpdateModal
+          open={true}
+          versionConfig={remoteConfig.version}
+          onClose={() => setActivePopup(null)}
+        />
+      )}
     </main>
   );
 }

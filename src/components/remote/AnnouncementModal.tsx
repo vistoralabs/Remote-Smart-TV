@@ -1,4 +1,3 @@
-import { useState, useEffect, useRef } from "react";
 import { X, Sparkles, ExternalLink } from "lucide-react";
 import {
   Dialog,
@@ -9,68 +8,38 @@ import {
 } from "@/components/ui/dialog";
 import type { AppAnnouncementConfig } from "@/lib/remote-config";
 
-interface AnnouncementModalProps {
-  announcement: AppAnnouncementConfig;
-  onboarded?: boolean;
+// In-memory per-launch session tracker
+// Resets automatically on every fresh app launch / page reload
+const sessionShownTitles = new Set<string>();
+
+export function shouldShowAnnouncement(announcement: AppAnnouncementConfig): boolean {
+  if (!announcement.enabled || !announcement.title) return false;
+  if (sessionShownTitles.has(announcement.title)) return false;
+  return true;
 }
 
-const DISMISSED_TITLE_KEY = "announcement.dismissedTitle";
-const SHOWN_SESSION_KEY = "announcement.shownInSession";
-const DELAY_MS = 2500; // 2.5 second delay after main UI loads
+export function markAnnouncementDismissed(title: string): void {
+  if (title) {
+    sessionShownTitles.add(title);
+  }
+}
 
-export function AnnouncementModal({ announcement, onboarded = true }: AnnouncementModalProps) {
-  const [open, setOpen] = useState(false);
-  const isMountedRef = useRef(true);
+export function resetAnnouncementSession(): void {
+  sessionShownTitles.clear();
+}
 
-  useEffect(() => {
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
+interface AnnouncementModalProps {
+  open: boolean;
+  announcement: AppAnnouncementConfig;
+  onClose: () => void;
+}
 
-  useEffect(() => {
-    // Strictly DO NOT show or start timer if onboarding is active
-    if (!onboarded) return;
-
-    // Don't show if not enabled or no title
-    if (!announcement.enabled || !announcement.title) return;
-
-    // Check if dismissed in localStorage
-    try {
-      const dismissed = window.localStorage.getItem(DISMISSED_TITLE_KEY);
-      if (dismissed === announcement.title) return;
-    } catch {
-      // ignore storage errors
-    }
-
-    // Check if already shown in this session
-    try {
-      const shownKey = `${SHOWN_SESSION_KEY}.${announcement.title}`;
-      if (window.localStorage.getItem(shownKey) === "true") return;
-    } catch {
-      // ignore storage errors
-    }
-
-    // Delay opening by 2.5 seconds to let the main UI render cleanly
-    const timeoutId = window.setTimeout(() => {
-      if (!isMountedRef.current) return;
-      setOpen(true);
-    }, DELAY_MS);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [announcement, onboarded]);
+export function AnnouncementModal({ open, announcement, onClose }: AnnouncementModalProps) {
+  if (!open || !announcement.enabled || !announcement.title) return null;
 
   const handleClose = () => {
-    setOpen(false);
-    try {
-      if (announcement.title) {
-        window.localStorage.setItem(DISMISSED_TITLE_KEY, announcement.title);
-        const shownKey = `${SHOWN_SESSION_KEY}.${announcement.title}`;
-        window.localStorage.setItem(shownKey, "true");
-      }
-    } catch {
-      /* ignore storage errors */
-    }
+    markAnnouncementDismissed(announcement.title);
+    onClose();
   };
 
   const handleOpen = (isOpen: boolean) => {
@@ -79,14 +48,12 @@ export function AnnouncementModal({ announcement, onboarded = true }: Announceme
     }
   };
 
-  if (!onboarded || !announcement.enabled || !announcement.title) return null;
-
   const primaryButtonText = announcement.buttonText?.trim() || "Open App";
 
   return (
     <Dialog open={open} onOpenChange={handleOpen}>
       <DialogContent
-        className="relative z-50 mx-auto w-[min(92vw,24rem)] max-w-sm rounded-3xl border p-0 shadow-2xl transition-all [&>button.absolute]:hidden"
+        className="z-50 w-[min(92vw,24rem)] max-w-sm rounded-3xl border p-0 shadow-2xl transition-all [&>button.absolute]:hidden"
         style={{
           backgroundColor: "var(--card, #1a1d23)",
           borderColor: "var(--border, #2c3038)",
