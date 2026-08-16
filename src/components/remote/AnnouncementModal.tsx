@@ -1,4 +1,5 @@
-import { X, Sparkles, ExternalLink } from "lucide-react";
+import { useState } from "react";
+import { X, ExternalLink } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -7,6 +8,10 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import type { AppAnnouncementConfig } from "@/lib/remote-config";
+import logo from "@/assets/logo.png";
+
+// Secondary default fallback URL if KV imageUrl is empty
+const DEFAULT_REMOTE_FALLBACK_URL = "https://img.icons8.com/color/96/cloud-download.png";
 
 // In-memory per-launch session tracker
 // Resets automatically on every fresh app launch / page reload
@@ -35,6 +40,9 @@ interface AnnouncementModalProps {
 }
 
 export function AnnouncementModal({ open, announcement, onClose }: AnnouncementModalProps) {
+  const [imgFailed, setImgFailed] = useState(false);
+  const [prevUrl, setPrevUrl] = useState<string | null>(null);
+
   if (!open || !announcement.enabled || !announcement.title) return null;
 
   const handleClose = () => {
@@ -49,6 +57,16 @@ export function AnnouncementModal({ open, announcement, onClose }: AnnouncementM
   };
 
   const primaryButtonText = announcement.buttonText?.trim() || "Open App";
+  
+  // 1. Primary: Cloudflare KV appAnnouncement.imageUrl
+  // 2. Secondary: DEFAULT_REMOTE_FALLBACK_URL
+  const displayImageUrl = announcement.imageUrl?.trim() || DEFAULT_REMOTE_FALLBACK_URL;
+
+  // Reset error state if remote config imageUrl updates dynamically
+  if (displayImageUrl !== prevUrl) {
+    setPrevUrl(displayImageUrl);
+    setImgFailed(false);
+  }
 
   return (
     <Dialog open={open} onOpenChange={handleOpen}>
@@ -74,24 +92,19 @@ export function AnnouncementModal({ open, announcement, onClose }: AnnouncementM
         </button>
 
         <div className="flex flex-col items-center gap-4 px-6 pb-6 pt-7 text-center">
-          {announcement.imageUrl ? (
+          {/* Top Popup Image Container with Fixed Neutral White Background for Day/Night Contrast */}
+          <div className="flex size-16 items-center justify-center rounded-2xl border border-white/20 bg-white p-2 shadow-md">
             <img
-              src={announcement.imageUrl}
-              alt="Announcement"
-              className="max-h-44 w-full rounded-2xl object-cover shadow-md"
-            />
-          ) : (
-            <div
-              className="flex size-14 items-center justify-center rounded-2xl border"
-              style={{
-                backgroundColor: "color-mix(in srgb, var(--primary, #f0a93f) 16%, transparent)",
-                borderColor: "color-mix(in srgb, var(--primary, #f0a93f) 35%, transparent)",
-                color: "var(--primary, #f0a93f)",
+              key={displayImageUrl}
+              src={imgFailed ? logo : displayImageUrl}
+              alt="Announcement Icon"
+              className="size-12 object-contain"
+              onError={() => {
+                console.error("[AnnouncementModal] Image failed to load:", displayImageUrl);
+                setImgFailed(true);
               }}
-            >
-              <Sparkles className="size-7" />
-            </div>
-          )}
+            />
+          </div>
 
           <DialogHeader className="items-center gap-1.5">
             <DialogTitle
