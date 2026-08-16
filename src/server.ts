@@ -71,7 +71,7 @@ const KV_CONFIG_KEY = "remote-config:v1";
 let inMemoryDynamicConfig: RemoteConfig = {
   ...DEFAULT_REMOTE_CONFIG,
   appAnnouncement: {
-    enabled: true,
+    enabled: false,
     title: "🎉 VISTORA LABS TEST",
     message: "Cloudflare Remote Config is working.",
     imageUrl: "",

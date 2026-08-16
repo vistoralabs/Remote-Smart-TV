@@ -70,7 +70,10 @@ export function useConnection(device: Device | null): ConnectionState {
     const attemptReconnect = async (address: string) => {
       if (reconnectingRef.current) return;
       reconnectingRef.current = true;
-      setReconnecting(true);
+      if (alive) {
+        setReconnecting(true);
+        setLastError(null);
+      }
 
       let backoff = INITIAL_BACKOFF_MS;
 
@@ -80,14 +83,21 @@ export function useConnection(device: Device | null): ConnectionState {
         await new Promise((resolve) => setTimeout(resolve, backoff));
         if (!alive) break;
 
-        const success = await reconnectAndroidTv(address);
-        if (!alive) break;
+        try {
+          const success = await reconnectAndroidTv(address);
+          if (!alive) break;
 
-        if (success) {
-          setConnected(true);
-          setReconnecting(false);
-          reconnectingRef.current = false;
-          return;
+          if (success) {
+            setConnected(true);
+            setReconnecting(false);
+            setLastError(null);
+            reconnectingRef.current = false;
+            return;
+          }
+        } catch {
+          // reconnectAndroidTv already catches internally, but guard
+          // against unexpected native bridge errors to prevent crashes.
+          if (!alive) break;
         }
 
         backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);
@@ -95,6 +105,7 @@ export function useConnection(device: Device | null): ConnectionState {
 
       if (alive) {
         setReconnecting(false);
+        setLastError("TV unreachable — tap to retry");
       }
       reconnectingRef.current = false;
     };
@@ -111,31 +122,39 @@ export function useConnection(device: Device | null): ConnectionState {
         setLastError(state.lastError ?? null);
 
         if (isPaired && !isConnected && !reconnectingRef.current) {
-          void attemptReconnect(state.address ?? device.address);
+          attemptReconnect(state.address ?? device.address).catch(() => {});
         }
       } catch {
         if (alive) {
           setConnected(false);
           if (!reconnectingRef.current) {
-            void attemptReconnect(device.address);
+            attemptReconnect(device.address).catch(() => {});
           }
         }
       }
     };
 
     const handleFocus = () => {
-      if (alive) void poll();
+      if (alive) poll().catch(() => {});
     };
 
-    // On initial mount, trigger native restore
-    void restoreAndroidTvConnection().then((st) => {
-      if (!alive) return;
-      if (st.paired) setPaired(true);
-      if (st.connected) setConnected(true);
-      void poll();
-    });
+    // On initial mount, trigger native restore — fully guarded against crashes
+    restoreAndroidTvConnection()
+      .then((st) => {
+        if (!alive) return;
+        if (st.paired) setPaired(true);
+        if (st.connected) setConnected(true);
+        poll().catch(() => {});
+      })
+      .catch(() => {
+        // Native bridge unavailable or TCP timeout — not fatal.
+        // Poll will pick up state on the next interval tick.
+        if (alive) poll().catch(() => {});
+      });
 
-    const timer = window.setInterval(poll, 2500);
+    const timer = window.setInterval(() => {
+      poll().catch(() => {});
+    }, 2500);
     window.addEventListener("visibilitychange", handleFocus);
     window.addEventListener("focus", handleFocus);
 
@@ -149,3 +168,4 @@ export function useConnection(device: Device | null): ConnectionState {
 
   return { connected, paired, reconnecting, host, lastError, refresh };
 }
+

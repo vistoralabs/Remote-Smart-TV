@@ -164,17 +164,17 @@ export function RemoteApp() {
     [devices, activeId],
   );
   const active = activeDevice;
-  const { connected, reconnecting } = useConnection(activeDevice);
+  const { connected, reconnecting, refresh: refreshConnection } = useConnection(activeDevice);
 
   // Discovery/pairing is never interrupted (DeviceSheet raises the critical flag);
   // a freshly linked TV is a genuine transition, so an interstitial is eligible there.
   useEffect(() => {
-    void setAdCriticalFlow(false);
+    setAdCriticalFlow(false).catch(() => {});
     noteConnection(connected);
     if (connected) {
       pressCount.current = 0;
       // A TV just linked: guaranteed full-screen ad at this transition.
-      void showInterstitialOnTransition();
+      showInterstitialOnTransition().catch(() => {});
       noteAdShown();
     }
   }, [connected]);
@@ -183,7 +183,7 @@ export function RemoteApp() {
   // still enforces the cooldown and never interrupts a critical flow.
   useEffect(() => {
     const timer = window.setInterval(() => {
-      void showInterstitialAtBreak();
+      showInterstitialAtBreak().catch(() => {});
       noteAdShown();
     }, 90_000);
     return () => window.clearInterval(timer);
@@ -402,7 +402,13 @@ export function RemoteApp() {
       ) : null}
 
       <div className="glass-panel flex shrink-0 items-center justify-between gap-3 rounded-2xl px-3 py-2">
-        <span className="flex min-w-0 items-center gap-2">
+        <button
+          type="button"
+          className="flex min-w-0 items-center gap-2 text-left"
+          disabled={connected || reconnecting || !active}
+          onClick={() => refreshConnection()}
+          aria-label={!connected && !reconnecting && active ? "Tap to reconnect" : undefined}
+        >
           <ActiveIcon className="size-4 shrink-0 text-primary" />
           <span className="min-w-0">
             <span className="block truncate text-xs font-medium text-foreground">
@@ -414,10 +420,16 @@ export function RemoteApp() {
                 connected ? "text-primary" : reconnecting ? "text-amber-400 animate-pulse" : "text-muted-foreground",
               )}
             >
-              {connected ? t("connected") : reconnecting ? "Connecting…" : t("notConnected")}
+              {connected
+                ? t("connected")
+                : reconnecting
+                  ? "Connecting…"
+                  : active
+                    ? "Disconnected · Tap to retry"
+                    : t("notConnected")}
             </span>
           </span>
-        </span>
+        </button>
         <RemoteKey
           ariaLabel={t("power")}
           onPress={() => press("power")}
@@ -536,8 +548,12 @@ export function RemoteApp() {
 
       {!hasNativeAds() && remoteConfig.ads.banner ? <WebAdBanner /> : null}
 
-      <AnnouncementModal announcement={remoteConfig.appAnnouncement} onboarded={settings.onboarded} />
-      <UpdateModal versionConfig={remoteConfig.version} />
+      {settings.onboarded ? (
+        <>
+          <AnnouncementModal announcement={remoteConfig.appAnnouncement} onboarded={settings.onboarded} />
+          <UpdateModal versionConfig={remoteConfig.version} />
+        </>
+      ) : null}
 
       <RatingDialog
         open={showRating}

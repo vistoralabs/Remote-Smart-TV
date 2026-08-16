@@ -86,12 +86,14 @@ export function AnnouncementModal({ announcement, onboarded = true }: Announceme
   return (
     <Dialog open={open} onOpenChange={handleOpen}>
       <DialogContent
-        className="relative mx-auto w-[90vw] max-w-sm rounded-3xl border p-0 shadow-2xl transition-all"
+        className="relative z-50 mx-auto w-[min(92vw,24rem)] max-w-sm rounded-3xl border p-0 shadow-2xl transition-all [&>button.absolute]:hidden"
         style={{
           backgroundColor: "var(--card, #1a1d23)",
           borderColor: "var(--border, #2c3038)",
           color: "var(--foreground, #f4f5f7)",
           boxShadow: "0 20px 50px -15px rgba(0, 0, 0, 0.4)",
+          maxHeight: "min(85vh, 40rem)",
+          overflowY: "auto",
         }}
       >
         {/* Top-Right Close Button */}
