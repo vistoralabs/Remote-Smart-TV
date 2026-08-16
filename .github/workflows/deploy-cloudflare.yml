@@ -9,8 +9,16 @@ on:
   push:
     branches: [main]
     paths:
+      - "src/components/**"
+      - "src/assets/**"
+      - "src/routes/**"
+      - "src/hooks/**"
+      - "src/lib/**"
       - "src/server.ts"
       - "src/lib/remote-config.ts"
+      - "src/**"
+      - "public/**"
+      - "index.html"
       - "vite.config.ts"
       - "wrangler.json"
       - "tsconfig.json"

@@ -92,13 +92,42 @@ export function AnnouncementModal({ open, announcement, onClose }: AnnouncementM
         </button>
 
         <div className="flex flex-col items-center gap-4 px-6 pb-6 pt-7 text-center">
-          {/* Top Popup Image Container with Fixed Neutral White Background for Day/Night Contrast */}
-          <div className="flex size-16 items-center justify-center rounded-2xl border border-white/20 bg-white p-2 shadow-md">
+          {/* Top Popup Image Container with Strict Inline Dimensions */}
+          <div
+            style={{
+              width: 64,
+              height: 64,
+              minWidth: 64,
+              minHeight: 64,
+              maxWidth: 64,
+              maxHeight: 64,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              overflow: "hidden",
+              borderRadius: 16,
+              backgroundColor: "#ffffff",
+              border: "1px solid rgba(255, 255, 255, 0.2)",
+              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+              boxSizing: "border-box",
+              flexShrink: 0,
+            }}
+          >
             <img
               key={displayImageUrl}
               src={imgFailed ? logo : displayImageUrl}
               alt="Announcement Icon"
-              className="size-12 object-contain"
+              style={{
+                width: 48,
+                height: 48,
+                minWidth: 48,
+                minHeight: 48,
+                maxWidth: 48,
+                maxHeight: 48,
+                objectFit: "contain",
+                display: "block",
+                flexShrink: 0,
+              }}
               onError={() => {
                 console.error("[AnnouncementModal] Image failed to load:", displayImageUrl);
                 setImgFailed(true);
